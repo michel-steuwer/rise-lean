@@ -1,0 +1,10 @@
+name = "rise-lean"
+version = "0.1.0"
+defaultTargets = ["rise-lean"]
+
+[[lean_lib]]
+name = "RiseLean"
+
+[[lean_exe]]
+name = "rise-lean"
+root = "Main"
