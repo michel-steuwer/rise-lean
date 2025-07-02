@@ -143,40 +143,43 @@ declare_syntax_cat                         rise_expr
 syntax rise_lit                          : rise_expr
 syntax ident                             : rise_expr
 syntax "fun" "(" ident "," rise_expr ")" : rise_expr
+syntax rise_expr "|>" rise_expr :rise_expr
 syntax rise_expr "(" rise_expr ")"       : rise_expr
 -- todo: primitives?
+
+macro_rules
+  | `(rise_expr| $e:rise_expr |> $f:rise_expr) => `(rise_expr| $f($e))
+
 
 partial def elabRiseExpr : Syntax → MetaM Expr
   | `(rise_expr| $l:rise_lit) => do
     let l ← elabRiseLit l
     mkAppM ``RiseExpr.lit #[l]
-  -- `mkStrLit` creates an `Expr` from a `String`
   | `(rise_expr| $i:ident) => mkAppM ``RiseExpr.ident #[mkStrLit i.getId.toString]
   | `(rise_expr| fun ( $x:ident , $e:rise_expr )) => do
-    let x ← elabRiseExpr x
     let e ← elabRiseExpr e
-    mkAppM ``RiseExpr.abst #[x, e]
-  | `(rise_expr| $e1:rise_expr ( $e2:rise_epxr )) => do
+    mkAppM ``RiseExpr.abst #[mkStrLit x.getId.toString, e]
+  | `(rise_expr| $e1:rise_expr ( $e2:rise_expr )) => do
       let e1 ← elabRiseExpr e1
       let e2 ← elabRiseExpr e2
       mkAppM ``RiseExpr.app #[e1, e2]
-  -- | `(rise_expr| $b:rise_unop $e:rise_expr) => do
-  --   let b ← elabRiseUnOp b
-  --   let e ← elabRiseExpr e -- recurse!
-  --   mkAppM ``RiseExpr.un #[b, e]
-  -- | `(rise_expr| $l:rise_expr $b:rise_binop $r:rise_expr) => do
-  --   let l ← elabRiseExpr l -- recurse!
-  --   let r ← elabRiseExpr r -- recurse!
-  --   let b ← elabRiseBinOp b
-  --   mkAppM ``RiseExpr.bin #[b, l, r]
-  -- | `(rise_expr| ($e:rise_expr)) => elabRiseExpr e
   | _ => throwUnsupportedSyntax
 
 elab "test_elabRiseExpr " e:rise_expr : term => elabRiseExpr e
 
 #reduce test_elabRiseExpr a
 
-#reduce test_elabRiseExpr fun(a,b)
+#reduce test_elabRiseExpr fun(a,b(c(5)))
+
+
+
+
+elab "[Rise|" p:rise_expr "]" : term => elabRiseExpr p
+
+
+#reduce [Rise|
+a |> b
+]
 
 -- RiseExpr.bin RiseBinOp.add (RiseExpr.var "a") (RiseExpr.lit (RiseLit.nat 5))
 
@@ -184,6 +187,3 @@ elab "test_elabRiseExpr " e:rise_expr : term => elabRiseExpr e
 -- RiseExpr.bin RiseBinOp.add (RiseExpr.lit (RiseLit.nat 1)) (RiseExpr.lit (RiseLit.bool true))
 --
 --
-
-
-syntax "[Rise|" rise_expr "]" : term
