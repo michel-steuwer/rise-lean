@@ -45,66 +45,37 @@ def main : IO Unit :=
 
 --   δ ::= n.δ | δ × δ | idx [n] | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 inductive RiseData
-  | array
-  | pair
-  | index
-  | scalar
-  | vector
+  | array  : Nat → RiseData → RiseData
+  | pair   : RiseData → RiseData → RiseData
+  | index  : Nat → RiseData
+  | scalar : RiseData
+  | vector : Nat → RiseData
 
--- High-Level Primitives:
-inductive RiseHighLevelPrimitive
---         id : (δ : data) → δ → δ
-  |        id : RiseData → RiseData → RiseHighLevelPrimitive
---        add : (δ : data) → δ → δ → δ
-  |       add : RiseData → RiseData → RiseData → RiseHighLevelPrimitive
---       mult : (δ : data) → δ → δ → δ
-  |      mult : RiseData → RiseData → RiseData → RiseHighLevelPrimitive
---       todo : (δ : data) → δ → δ → δ
-  |      todo : RiseData → RiseData → RiseData → RiseHighLevelPrimitive
---        fst : (δ1 δ2 : data) → δ1 × δ2 → δ1
-  |       fst : RiseData → RiseData → RiseHighLevelPrimitive
---        snd : (δ1 δ2 : data) → δ1 × δ2 → δ2
-  |       snd : RiseData → RiseData → RiseHighLevelPrimitive
---        map : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2) → n.δ1 → n.δ2
-  |       map : (RiseData → RiseData) → RiseData → RiseData  → RiseHighLevelPrimitive
---     reduce : (n : nat) → (δ : data) → (δ → δ → δ) → δ → n.δ → δ
-  |    reduce : (RiseData → RiseData → RiseData) → RiseData → RiseData → RiseData → RiseHighLevelPrimitive
---        zip : (n : nat) → (δ1 δ2 : data) → n.δ1 → n.δ2 → n.(δ1 × δ2)
-  |       zip : RiseData → RiseData → RiseData → RiseHighLevelPrimitive
---      split : (n m : nat) → (δ : data) → nm.δ → n.m.δ
-  |     split : RiseData → RiseData → RiseHighLevelPrimitive
---       join : (n m : nat) → (δ : data) → n.m.δ → nm.δ
-  |      join : RiseData → RiseData → RiseHighLevelPrimitive
---  transpose : (n m : nat) → (δ : data) → n.m.δ → m.n.δ
-  | transpose : RiseData → RiseData → RiseHighLevelPrimitive
---   generate : (n : nat) → (δ : data) → (idx [n] → δ) → n.δ
-  |  generate : (RiseData → RiseData) → RiseData → RiseHighLevelPrimitive
+declare_syntax_cat rise_data
+syntax:50 num "." rise_data:50       : rise_data -- todo: not num, but nat expr, potentially with identifiers; also: doesn't work without spaces. workaround?
+syntax:50 "float" :          rise_data
+syntax:10 rise_data "×" rise_data : rise_data
+syntax "idx" "[" num "]" :rise_data -- todo: not num, see above
+syntax "(" rise_data ")" : rise_data
 
--- Low-Level Primitives:
-inductive RiseLowLevelPrimitive
---           mapSeq : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2) → n.δ1 → n.δ2
-  |          mapSeq : (RiseData → RiseData) → RiseData → RiseData → RiseLowLevelPrimitive
---     mapSeqUnroll : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2) → n.δ1 → n.δ2
-  |    mapSeqUnroll : (RiseData → RiseData) → RiseData → RiseData → RiseLowLevelPrimitive
---           mapPar : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2) → n.δ1 → n.δ2
-  |          mapPar : (RiseData → RiseData) → RiseData → RiseData → RiseLowLevelPrimitive
---        reduceSeq : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2 → δ1) → δ1 → n.δ2 → δ1
-  |       reduceSeq : (RiseData → RiseData → RiseData) → RiseData → RiseData → RiseData → RiseLowLevelPrimitive
---  reduceSeqUnroll : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2 → δ1) → δ1 → n.δ2 → δ1
-  | reduceSeqUnroll : (RiseData → RiseData → RiseData) → RiseData → RiseData → RiseData → RiseLowLevelPrimitive
---            toMem : (δ1 δ2 : data) → δ1 → (δ1 → δ2) → δ2
-  |           toMem : RiseData → RiseData → RiseData → RiseData → RiseLowLevelPrimitive
---           mapVec : (n : nat) → (δ1 δ2 : data) → (δ1 → δ2) → n<δ1> → n<δ2>
-  |          mapVec : RiseData → RiseData → RiseData → RiseData → RiseLowLevelPrimitive
---         asVector : (n m : nat) → (δ : data) → nm.δ → n.m<δ>
-  |        asVector : RiseData → RiseData → RiseData → RiseData → RiseLowLevelPrimitive
---         asScalar : (n m : nat) → (δ : data) → n.m<δ> → nm.δ
-  |        asScalar : RiseData → RiseData → RiseData → RiseData → RiseLowLevelPrimitive
+partial def elabRiseData : Syntax → MetaM Expr
+  | `(rise_data| $n:num . $d:rise_data) => do
+    let d ← elabRiseData d
+    mkAppM ``RiseData.array  #[mkNatLit n.getNat, d]
+  | `(rise_data| float) => mkAppM ``RiseData.scalar #[]
+  | `(rise_data| $l:rise_data × $r:rise_data) => do
+    let l ← elabRiseData l
+    let r ← elabRiseData r
+    mkAppM ``RiseData.pair  #[l, r]
+  | `(rise_data| ($d:rise_data)) => elabRiseData d
+  | _ => throwUnsupportedSyntax
 
-inductive RisePrimitive
-  | RiseHighLevelPrimitive
-  | RiseLowLevelPrimitive
+elab "test_elabRiseData " l:rise_data : term => elabRiseData l
 
+#reduce test_elabRiseData 4 . 5 . float
+
+#reduce test_elabRiseData 1 . 2 . float × 3 . 4 . float
+#reduce test_elabRiseData (1 . 2 . float) × (3 . 4 . float)
 
 
 inductive RiseLit
@@ -136,7 +107,7 @@ inductive RiseExpr
   | app   : RiseExpr → RiseExpr → RiseExpr
   | ident : String → RiseExpr
   | lit   : RiseLit → RiseExpr
-  | prim  : RisePrimitive → RiseExpr
+ -- | prim  : RisePrimitive → RiseExpr
 
 
 declare_syntax_cat                         rise_expr
