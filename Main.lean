@@ -143,10 +143,14 @@ declare_syntax_cat                         rise_expr
 syntax rise_lit                          : rise_expr
 syntax ident                             : rise_expr
 syntax "fun" "(" ident "," rise_expr ")" : rise_expr
-syntax rise_expr "|>" rise_expr :rise_expr
 syntax rise_expr "(" rise_expr ")"       : rise_expr
+syntax rise_expr "|>" rise_expr          : rise_expr
+
 -- todo: primitives?
 
+
+-- todo: couldn't figure out how to apply this macro before elabRiseExpr,
+--       so now RiseExpr.app is kinda doubled
 macro_rules
   | `(rise_expr| $e:rise_expr |> $f:rise_expr) => `(rise_expr| $f($e))
 
@@ -163,23 +167,34 @@ partial def elabRiseExpr : Syntax → MetaM Expr
       let e1 ← elabRiseExpr e1
       let e2 ← elabRiseExpr e2
       mkAppM ``RiseExpr.app #[e1, e2]
+  | `(rise_expr| $e1:rise_expr |> $e2:rise_expr) => do
+      let e1 ← elabRiseExpr e1
+      let e2 ← elabRiseExpr e2
+      mkAppM ``RiseExpr.app #[e2, e1]
   | _ => throwUnsupportedSyntax
 
 elab "test_elabRiseExpr " e:rise_expr : term => elabRiseExpr e
 
+open RiseExpr
+
 #reduce test_elabRiseExpr a
 
-#reduce test_elabRiseExpr fun(a,b(c(5)))
-
+#reduce test_elabRiseExpr fun(a,b(c(5))) -- hello
 
 
 
 elab "[Rise|" p:rise_expr "]" : term => elabRiseExpr p
 
-
 #reduce [Rise|
-a |> b
+
+fun(as, fun(bs,
+     zip(as)(bs) |> map(fun(ab, mult(fst(ab))(snd(ab)))) |> reduce(add)(0) ) )
+
 ]
+
+declare_syntax_cat rise_program
+syntax "val" ident "=" rise_expr : rise_program
+syntax rise_program rise_program : rise_program
 
 -- RiseExpr.bin RiseBinOp.add (RiseExpr.var "a") (RiseExpr.lit (RiseLit.nat 5))
 
