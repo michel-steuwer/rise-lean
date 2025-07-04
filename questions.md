@@ -14,3 +14,9 @@ tuesdays 10:00
 q
 
 type system
+
+# binders
+
+https://leanprover.zulipchat.com/#narrow/channel/239415-metaprogramming-.2F-tactics/topic/Auxiliary.20information.20for.20delaboration
+
+https://github.com/rami3l/PLFaLean/blob/master/Plfl/Lambda.lean
