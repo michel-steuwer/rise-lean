@@ -138,15 +138,15 @@ partial def elabRiseExpr : Syntax → TermElabM Expr
   | `(rise_expr| $l:rise_lit) => do
     let l ← elabRiseLit l
     mkAppM ``RiseExpr'.lit #[l]
-  | `(rise_expr| $i:ident) => mkAppM ``RiseExpr'.ident #[mkStrLit i.getId.toString]
+  | `(rise_expr| $i:ident) => do
+    let i ← elabTerm i none
+    mkAppM ``RiseExpr'.ident #[i]
   | `(rise_expr| fun ( $x:ident , $b:rise_expr )) => do
     let type ← mkFreshTypeMVar
     withLocalDeclD x.getId type fun fvar => do
-      let b ← elabTerm b none
+      let b ← elabRiseExpr b
       let abst ← mkLambdaFVars #[fvar] b
-      mkAppM ``RiseExpr' #[abst]
-    -- let e ← elabRiseExpr e
-    -- mkAppM ``RiseExpr.abst #[mkStrLit x.getId.toString, e]
+      mkAppM ``RiseExpr'.abst #[abst]
   | `(rise_expr| $e1:rise_expr ( $e2:rise_expr )) => do
       let e1 ← elabRiseExpr e1
       let e2 ← elabRiseExpr e2
