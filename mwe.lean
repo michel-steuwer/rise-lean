@@ -54,7 +54,7 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
   | _ => throwUnsupportedSyntax
 
 -- The top-level elaborator that sets up the polymorphic 'rep'
-elab "test_elabLamb " l:lamb_expr : term => do
+elab "[lamb|" l:lamb_expr "]" : term => do
   -- We create a binder for `rep` which makes `LambTerm` polymorphic.
   withLocalDeclD `rep (← mkArrow (Lean.mkConst ``LambType) (mkSort levelOne)) fun repVar => do
     let (term, _) ← elabLamb l repVar []
@@ -63,21 +63,33 @@ elab "test_elabLamb " l:lamb_expr : term => do
 --set_option pp.explicit true
 
 -- This should now work and produce a term of type `LambTerm .nat`
-#reduce test_elabLamb 3
+#reduce [lamb| 3]
 
 -- This should also work, producing a term of type `LambTerm (.fn .nat .nat)`
-#reduce test_elabLamb lamb x . lamb y . y
+#reduce [lamb| lamb x . lamb y . y ]
 
 -- Example of a more complex term
-#reduce test_elabLamb lamb x . lamb y . x
+#reduce [lamb| lamb x . lamb y . x]
 
-elab "[lamb|" p:lamb_expr "]" : term => elabLamb p
-elab ">>" p:imp_program "<<" : term => elabIMPProgram p
-
-
+#check identity
 
 def iidentity : LambTerm (.fn .nat .nat) :=
   .abst (fun x => .var x)
 
-def iiidentity : LambTerm (.fn .nat .nat) :=
-  [lamb| x ]
+def iiiidentity : LambTerm (.fn .nat .nat) :=
+  [lamb| lamb x . x ]
+
+def iiidentity : (rep : LambType → Type) → LambTerm' rep (LambType.nat.fn LambType.nat) :=
+  [lamb| lamb x . x ]
+
+def pretty (e : LambTerm' (fun _ => String) ty) (i : Nat := 1) : String :=
+  match e with
+  | .var s     => s
+  | .const n   => toString n
+  --| .app f a   => s!"({pretty f i} {pretty a i})"
+  --| .plus a b  => s!"({pretty a i} + {pretty b i})"
+  | .abst f     =>
+    let x := s!"x_{i}"
+    s!"(fun {x} => {pretty (f x) (i+1)})"
+
+#eval pretty $ [lamb| lamb x . x] (fun _ => String)
