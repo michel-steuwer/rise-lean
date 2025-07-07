@@ -56,9 +56,9 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
 -- The top-level elaborator that sets up the polymorphic 'rep'
 elab "[lamb|" l:lamb_expr "]" : term => do
   -- We create a binder for `rep` which makes `LambTerm` polymorphic.
-  withLocalDeclD `rep (← mkArrow (Lean.mkConst ``LambType) (mkSort levelOne)) fun repVar => do
-    let (term, _) ← elabLamb l repVar []
-    mkLambdaFVars #[repVar] term
+  let repMVar ← mkFreshExprMVar (← mkArrow (Lean.mkConst ``LambType) (mkSort levelOne))
+  let (term, _) ← elabLamb l repMVar []
+  return term
 
 --set_option pp.explicit true
 
@@ -79,7 +79,7 @@ def iidentity : LambTerm (.fn .nat .nat) :=
 def iiiidentity : LambTerm (.fn .nat .nat) :=
   [lamb| lamb x . x ]
 
-def iiidentity : (rep : LambType → Type) → LambTerm' rep (LambType.nat.fn LambType.nat) :=
+def iiidentity : LambTerm (LambType.nat.fn LambType.nat) :=
   [lamb| lamb x . x ]
 
 def pretty (e : LambTerm' (fun _ => String) ty) (i : Nat := 1) : String :=
@@ -92,4 +92,4 @@ def pretty (e : LambTerm' (fun _ => String) ty) (i : Nat := 1) : String :=
     let x := s!"x_{i}"
     s!"(fun {x} => {pretty (f x) (i+1)})"
 
-#eval pretty $ [lamb| lamb x . x] (fun _ => String)
+#eval pretty $ [lamb| lamb x . x]
