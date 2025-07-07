@@ -1,5 +1,51 @@
-
 import Lean
+
+-- Why parametric higher-order abstract syntax (PHOAS)?
+-- Let's start with first-order abstract syntax (FOAS):
+namespace FOAS
+inductive Term
+  | var   : Term
+  | const : Nat → Term
+  | abst  : String → Term → Term
+-- Variables are represented by Strings. This works, but means that Lean doesn't know about
+-- the object language's binders, and we have to manually implement things such as name analysis and beta-reduction.
+-- This will also make it more cumbersome to prove things about our object language.
+end FOAS
+
+-- We can do better: with _higher_-order abstract syntax (HOAS).
+-- That is, we represent binders of the object language with binders of the meta language (Lean). 
+-- So now, the Term.abst constructor takes a function Term → Term.
+--
+-- But this leads to the following error:
+
+namespace HOAS
+/--
+error: (kernel) arg #1 of 'HOAS.Term.abst' has a non positive occurrence of the datatypes being declared
+-/
+#guard_msgs in
+inductive Term
+  | var   : Term
+  | const : Nat → Term
+  | abst  : (Term → Term) → Term
+--        [1] ^
+
+-- The Lean kernel has a "strict positivity restriction": When defining an inductive type, the type
+-- being defined must not occur to the left of an arrow in the type of a constructor argument. This happens at [1].
+-- It's not allowed because it would break normalization.
+-- "We would be able to prove every theorem with an inifinite loop"
+
+def uhoh (t : Term) : Term :=
+  match t with
+    | .abst f => f t
+    | _ => t
+
+-- uhoh (Term.abst uhoh) -- ← This term would loop forever.
+
+end HOAS
+
+-- So, enter PHOAS!
+
+-- First, we'll also make our language typed.
 
 inductive Ty where
   | nat
@@ -9,13 +55,17 @@ inductive Ty where
   | nat    => Nat
   | fn a b => a.denote → b.denote
 
-example : Ty := Ty.fn Ty.nat Ty.nat
+-- Now we define Term'. It is parametrized by a type family `rep` which stands for "representation of variables".
+-- In Term'.abst, we again have a function as argument, but that function now only takes a variable as argument.
+--
+-- The `rep` parameter is treated as an unconstrained choice of which data should be annotated on each variable.
+-- And the caller decides which data should be annotated - we construct terms in our language without mentioning `rep`.
 
 inductive Term' (rep : Ty → Type) : Ty → Type
   | var   : rep ty → Term' rep ty
   | const : Nat → Term' rep .nat
   | plus  : Term' rep .nat → Term' rep .nat → Term' rep .nat
-  | lam   : (rep dom → Term' rep ran) → Term' rep (.fn dom ran)
+  | abst   : (rep dom → Term' rep ran) → Term' rep (.fn dom ran)
   | app   : Term' rep (.fn dom ran) → Term' rep dom → Term' rep ran
   | let   : Term' rep ty₁ → (rep ty₁ → Term' rep ty₂) → Term' rep ty₂
 
@@ -26,7 +76,7 @@ namespace FirstTry
   def Term (ty : Ty) := (rep : Ty → Type) → Term' rep ty
 
   def add : Term (fn nat (fn nat nat)) := fun _rep =>
-    .lam fun x => .lam fun y => .plus (.var x) (.var y)
+    .abst fun x => .abst fun y => .plus (.var x) (.var y)
 
   def three_the_hard_way : Term nat := fun rep =>
     .app (.app (add rep) (.const 1)) (.const 2)
@@ -36,55 +86,9 @@ end FirstTry
 
 def Term (ty : Ty) := {rep : Ty → Type} → Term' rep ty
 
-declare_syntax_cat imp_lit
-syntax (name:=mylamb) "lam" ident "." term : imp_lit
-syntax num : imp_lit
-
-def e : Term nat := .const 3
-
-open Lean Elab Command Term Meta
-
--- @[term_elab mylamb]
--- def myTerm1Impl : TermElab := fun stx type? => do
---   mkAppM ``Term'.lam #[]
---   --mkAppM ``List.get! #[.const ``mytermValues [], mkNatLit 0] -- `MetaM` code
-
-def elabIMPLit : Syntax → TermElabM Expr
-  | `(imp_lit| lam $x:ident . $b:term) => do
-    let type ← mkFreshTypeMVar
-    withLocalDeclD x.getId type fun fvar => do
-      let b ← elabTerm b none
-      -- let b ← mkAppM ``Term'.const #[mkNatLit 1]
-      let laam ← mkLambdaFVars #[fvar] b
-      mkAppM ``Term'.lam #[laam]
-  | `(imp_lit| $n:num) =>
-    mkAppM ``Term'.const #[mkNatLit n.getNat]
-  | _ => throwUnsupportedSyntax
-
-elab "test_elabIMPLit " l:imp_lit : term => elabIMPLit l
-
-#reduce test_elabIMPLit lam x . Term'.var x
-
-
-#reduce test_elabIMPLit 3
-
-
-     -- IMPLit.nat 4
--- #reduce test_elabIMPLit true  -- IMPLit.bool true
--- #reduce test_elabIMPLit false -- IMPLit.bool true
-
--- macro_rules
---   | `(lamb $x:ident ! $body:term) => `(Term.lam (fun $x => $x))
-
--- #check lamb as ! as
-
---  | `({ $var:ident : $ty:term | $body:term }) => `(setOf (fun ($var : $ty) => $body))
---  | `({ $var:ident ∈ $s:term | $body:term }) => `(setOf (fun $var => $var ∈ $s ∧ $body))
-
-
 
 def add : Term (fn nat (fn nat nat)) :=
-  .lam fun x => .lam fun y => .plus (.var x) (.var y)
+  .abst fun x => .abst fun y => .plus (.var x) (.var y)
 
 def three_the_hard_way : Term nat :=
   .app (.app add (.const 1)) (.const 2)
@@ -94,7 +98,7 @@ def countVars : Term' (fun _ => Unit) ty → Nat
   | .const _  => 0
   | .plus a b => countVars a + countVars b
   | .app f a  => countVars f + countVars a
-  | .lam b    => countVars (b ())
+  | .abst b    => countVars (b ())
   | .let a b  => countVars a + countVars (b ())
 
 example : countVars add = 2 := rfl
@@ -105,7 +109,7 @@ def pretty (e : Term' (fun _ => String) ty) (i : Nat := 1) : String :=
   | .const n   => toString n
   | .app f a   => s!"({pretty f i} {pretty a i})"
   | .plus a b  => s!"({pretty a i} + {pretty b i})"
-  | .lam f     =>
+  | .abst f     =>
     let x := s!"x_{i}"
     s!"(fun {x} => {pretty (f x) (i+1)})"
   | .let a b  =>
@@ -117,7 +121,7 @@ def pretty (e : Term' (fun _ => String) ty) (i : Nat := 1) : String :=
 #eval pretty add
 
 def idd : Term (fn nat nat) :=
-  .lam (fun x => .var x)
+  .abst (fun x => .var x)
 
 #eval pretty idd
 
@@ -126,7 +130,7 @@ def squash : Term' (Term' rep) ty → Term' rep ty
  | .var e    => e
  | .const n  => .const n
  | .plus a b => .plus (squash a) (squash b)
- | .lam f    => .lam fun x => squash (f (.var x))
+ | .abst f    => .abst fun x => squash (f (.var x))
  | .app f a  => .app (squash f) (squash a)
  | .let a b  => .let (squash a) fun x => squash (b (.var x))
 
@@ -142,7 +146,7 @@ def subst (e : Term1 ty1 ty2) (e' : Term ty1) : Term ty2 :=
   | .const n  => n
   | .plus a b => denote a + denote b
   | .app f a  => denote f (denote a)
-  | .lam f    => fun x => denote (f x)
+  | .abst f    => fun x => denote (f x)
   | .let a b  => denote (b (denote a))
 
 example : denote three_the_hard_way = 3 :=
@@ -153,7 +157,7 @@ example : denote three_the_hard_way = 3 :=
   | .var x    => .var x
   | .const n  => .const n
   | .app f a  => .app (constFold f) (constFold a)
-  | .lam f    => .lam fun x => constFold (f x)
+  | .abst f    => .abst fun x => constFold (f x)
   | .let a b  => .let (constFold a) fun x => constFold (b x)
   | .plus a b =>
     match constFold a, constFold b with

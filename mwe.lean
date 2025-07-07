@@ -68,8 +68,9 @@ elab "[lamb|" l:lamb_expr "]" : term => do
 -- This should also work, producing a term of type `LambTerm (.fn .nat .nat)`
 #reduce [lamb| lamb x . lamb y . y ]
 
--- Example of a more complex term
-#reduce [lamb| lamb x . lamb y . x]
+#check [lamb| lamb x . lamb y . y ]
+
+#check [lamb| lamb x . lamb y . y ]
 
 #check identity
 
