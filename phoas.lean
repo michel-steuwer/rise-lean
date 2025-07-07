@@ -38,7 +38,9 @@ def Term (ty : Ty) := {rep : Ty → Type} → Term' rep ty
 
 declare_syntax_cat imp_lit
 syntax (name:=mylamb) "lam" ident "." term : imp_lit
+syntax num : imp_lit
 
+def e : Term nat := .const 3
 
 open Lean Elab Command Term Meta
 
@@ -47,20 +49,27 @@ open Lean Elab Command Term Meta
 --   mkAppM ``Term'.lam #[]
 --   --mkAppM ``List.get! #[.const ``mytermValues [], mkNatLit 0] -- `MetaM` code
 
-
-
 def elabIMPLit : Syntax → TermElabM Expr
   | `(imp_lit| lam $x:ident . $b:term) => do
     let type ← mkFreshTypeMVar
     withLocalDeclD x.getId type fun fvar => do
       let b ← elabTerm b none
+      -- let b ← mkAppM ``Term'.const #[mkNatLit 1]
       let laam ← mkLambdaFVars #[fvar] b
       mkAppM ``Term'.lam #[laam]
+  | `(imp_lit| $n:num) =>
+    mkAppM ``Term'.const #[mkNatLit n.getNat]
   | _ => throwUnsupportedSyntax
 
 elab "test_elabIMPLit " l:imp_lit : term => elabIMPLit l
 
-#reduce test_elabIMPLit lam x . Term'.var x     -- IMPLit.nat 4
+#reduce test_elabIMPLit lam x . Term'.var x
+
+
+#reduce test_elabIMPLit 3
+
+
+     -- IMPLit.nat 4
 -- #reduce test_elabIMPLit true  -- IMPLit.bool true
 -- #reduce test_elabIMPLit false -- IMPLit.bool true
 

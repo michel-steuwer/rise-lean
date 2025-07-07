@@ -1,7 +1,7 @@
 import RiseLean
 import Lean
-open Lean Elab Meta
-open Lean.Elab.Term
+open Lean Elab Meta Command
+--open Lean.Elab.Term
 
 def main : IO Unit :=
   IO.println s!"Hello, {hello}!"
@@ -110,21 +110,29 @@ elab "test_elabRiseLit " l:rise_lit : term => elabRiseLit l
 
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 inductive RiseType where
- | data : RiseData → RiseType
- | fn : RiseType → RiseType → RiseType
+  | any : RiseType
+  | data : RiseData → RiseType
+  | fn : RiseType → RiseType → RiseType
 
 --   e ::= fun(x, e) | e (e) | x | l | P             (Abstraction, Application, Identifier, Literal, Primitives)
-inductive RiseExpr' (rep: RiseType → Type) : RiseType → Type
+inductive RiseExpr' (rep : RiseType → Type) : RiseType → Type
   | abst  : (rep dom → RiseExpr' rep ran) → RiseExpr' rep (.fn dom ran)
   | app   : RiseExpr' rep (.fn dom ran) → RiseExpr' rep dom → RiseExpr' rep ran
   | ident : rep ty → RiseExpr' rep ty
-  | lit   : RiseLit → RiseExpr' rep ty
+  | lit   : Nat → RiseExpr' rep ty
+  | muh : RiseExpr' rep ty
  -- | prim  : RisePrimitive → RiseExpr
 
 def RiseExpr (ty : RiseType) := {rep : RiseType → Type} → RiseExpr' rep ty
 
+def e : RiseExpr (.any) := (RiseExpr'.lit $ 1)
+
+
+
 declare_syntax_cat                         rise_expr
-syntax rise_lit                          : rise_expr
+syntax "muh" :rise_expr
+-- syntax rise_lit                          : rise_expr
+syntax num : rise_expr
 syntax ident                             : rise_expr
 syntax "fun" "(" ident "," rise_expr ")" : rise_expr
 syntax rise_expr "(" rise_expr ")"       : rise_expr -- application
@@ -134,12 +142,24 @@ syntax rise_expr "<<" rise_expr          : rise_expr -- sugar for application
 -- todo: primitives?
 
 
+
+-- set_option trace.Meta.
+
 partial def elabRiseExpr : Syntax → TermElabM Expr
-  | `(rise_expr| $l:rise_lit) => do
-    let l ← elabRiseLit l
-    mkAppM ``RiseExpr'.lit #[l]
+  -- | `(rise_expr| $l:rise_lit) => do
+  --   -- let l ← elabRiseLit l
+  --   mkAppM ``RiseExpr'.lit #[l]
+  | `(rise_expr| $l:num) => do
+    -- let l ← elabRiseLit l
+  let t ← mkAppM ``RiseType.any #[] -- ???
+  let x ← mkAppM ``RiseExpr'.lit #[mkNatLit l.getNat]
+  ---return Expr.inferImplicit x 2 true
+  return x
+  | `(rise_expr| muh) => do
+    mkAppM ``RiseExpr'.muh #[]
   | `(rise_expr| $i:ident) => do
-    let i ← elabTerm i none
+    let t ← mkAppM ``RiseType.any #[] -- ???
+    let i ← Term.elabTerm i t
     mkAppM ``RiseExpr'.ident #[i]
   | `(rise_expr| fun ( $x:ident , $b:rise_expr )) => do
     let type ← mkFreshTypeMVar
@@ -159,9 +179,17 @@ partial def elabRiseExpr : Syntax → TermElabM Expr
 elab "test_elabRiseExpr " e:rise_expr : term => elabRiseExpr e
 
 -- open RiseExpr
+
+
+set_option pp.explicit true
+
+
+#reduce test_elabRiseExpr muh
+
+#reduce test_elabRiseExpr 1
+
 #reduce test_elabRiseExpr fun(a, a)
 
-#reduce test_elabRiseExpr a
 
 #reduce test_elabRiseExpr fun(a,b(c(5))) -- hello
 
