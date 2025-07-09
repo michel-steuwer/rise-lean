@@ -13,7 +13,7 @@ inductive Term
 end FOAS
 
 -- We can do better: with _higher_-order abstract syntax (HOAS).
--- That is, we represent binders of the object language with binders of the meta language (Lean). 
+-- That is, we represent binders of the object language with binders of the meta language (Lean).
 -- So now, the Term.abst constructor takes a function Term → Term.
 --
 -- But this leads to the following error:
@@ -71,18 +71,6 @@ inductive Term' (rep : Ty → Type) : Ty → Type
 
 
 open Ty (nat fn)
-
-namespace FirstTry
-  def Term (ty : Ty) := (rep : Ty → Type) → Term' rep ty
-
-  def add : Term (fn nat (fn nat nat)) := fun _rep =>
-    .abst fun x => .abst fun y => .plus (.var x) (.var y)
-
-  def three_the_hard_way : Term nat := fun rep =>
-    .app (.app (add rep) (.const 1)) (.const 2)
-end FirstTry
-
-
 
 def Term (ty : Ty) := {rep : Ty → Type} → Term' rep ty
 
