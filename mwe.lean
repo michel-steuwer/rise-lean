@@ -12,12 +12,13 @@ inductive LambType where
 inductive LambTerm' (rep : LambType → Type) : LambType → Type where
   | var   : rep ty → LambTerm' rep ty
   | const : Nat → LambTerm' rep .nat
+  | prim : String → LambTerm' rep ty
   | app   : LambTerm' rep (.fn dom ran) → LambTerm' rep dom → LambTerm' rep ran
   | abst  : (rep dom → LambTerm' rep ran) → LambTerm' rep (.fn dom ran)
 
 def LambTerm (ty : LambType) := {rep : LambType → Type} → LambTerm' rep ty
 
-def identity : LambTerm (.fn .nat .nat) :=
+def identity : LambTerm' rep (.fn .nat .nat) :=
   .abst (fun x => .var x)
 
 #check identity
@@ -27,6 +28,7 @@ syntax "lamb" ident "." lamb_expr : lamb_expr
 syntax ident                      : lamb_expr
 syntax lamb_expr lamb_expr        : lamb_expr
 syntax num                        : lamb_expr
+syntax "plus" : lamb_expr
 
 -- TODO: i wonder if the manual context management is necessary at all?
 abbrev ElabCtx := List (Name × Expr × Expr) -- name, fvar, and lambtype
@@ -45,6 +47,13 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
       let term := mkAppN (mkConst ``LambTerm'.abst) #[rep, domType, ranType, abstFn]
       return (term, fnType)
 
+  | `(lamb_expr| plus) => do
+    match ctx.find? (fun (name, _, _) => name == "plus".toName) with
+    | some (_, fvar, lambType) =>
+      return (fvar, lambType)
+    | none => throwError s!"unknown identifier plus"
+
+
   | `(lamb_expr| $x:ident) => do
     match ctx.find? (fun (name, _, _) => name == x.getId) with
     | some (_, fvar, lambType) =>
@@ -54,9 +63,12 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
     --       the unknown identifier was found.
     | none => throwError s!"unknown identifier {x}"
 
+
+
   | `(lamb_expr| $e1:lamb_expr $e2:lamb_expr) => do
       let (e1, e1Type) ← elabLamb e1 rep ctx
       let (e2, e2Type) ← elabLamb e2 rep ctx
+
       -- TODO: check e1 is .fn, get dom type from there
       -- let term := mkAppN (mkConst ``LambTerm'.app) #[rep, e1, e2]
       return (e1, e1Type)
@@ -68,28 +80,33 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
 
   | _ => throwUnsupportedSyntax
 
-def context : ElabCtx := [
-  -- adding "primitive" to context. could be made nicer with a LambType.toExpr.
-  ("plus".toName,
-    mkConst ``Unit,
-    mkAppN (mkConst ``LambType.fn)
-           #[mkConst ``LambType.nat, mkConst ``LambType.nat]),
-]
 
 elab "[lamb|" l:lamb_expr "]" : term => do
   -- creates implicit parameter rep. otherwise result contains metavariable, which AppBuilder doesn't like
   let repMVar ← mkFreshExprMVar
                   (← mkArrow (mkConst ``LambType) (mkSort levelOne))
                   (userName := "rep".toName)
+  let context : ElabCtx := [
+    -- adding "primitive" to context. could be made nicer with a LambType.toExpr.
+    ("plus".toName,
+     mkAppN (mkConst ``LambTerm'.prim) #[repMVar,
+                  mkAppN (mkConst ``LambType.fn)
+                  #[mkConst ``LambType.nat, mkConst ``LambType.nat],
+                  mkStrLit "plus"
+                  ],
+     mkAppN (mkConst ``LambType.fn)
+             #[mkConst ``LambType.nat, mkConst ``LambType.nat]),
+  ]
   let (term, _) ← elabLamb l repMVar context
   return term
 
--- set_option pp.explicit true
+--set_option pp.explicit true
 open LambType
+
 
 #check [lamb| 3]
 
-#check [lamb| lamb x . lamb y . x ]
+#check [lamb| lamb x . lamb y . plus x ]
 
 #check identity
 

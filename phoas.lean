@@ -4,7 +4,7 @@ import Lean
 -- Let's start with first-order abstract syntax (FOAS):
 namespace FOAS
 inductive Term
-  | var   : Term
+  | var   : String → Term
   | const : Nat → Term
   | abst  : String → Term → Term
 -- Variables are represented by Strings. This works, but means that Lean doesn't know about
@@ -24,7 +24,7 @@ error: (kernel) arg #1 of 'HOAS.Term.abst' has a non positive occurrence of the 
 -/
 #guard_msgs in
 inductive Term
-  | var   : Term
+  | var   : Term -- UGH
   | const : Nat → Term
   | abst  : (Term → Term) → Term
 --        [1] ^
@@ -39,7 +39,9 @@ def uhoh (t : Term) : Term :=
     | .abst f => f t
     | _ => t
 
--- uhoh (Term.abst uhoh) -- ← This term would loop forever.
+-- uhoh (Term.abst uhoh)
+
+-- ← This term would loop forever.
 
 end HOAS
 
@@ -69,11 +71,12 @@ inductive Term' (rep : Ty → Type) : Ty → Type
   | app   : Term' rep (.fn dom ran) → Term' rep dom → Term' rep ran
   | let   : Term' rep ty₁ → (rep ty₁ → Term' rep ty₂) → Term' rep ty₂
 
-
 open Ty (nat fn)
-
 def Term (ty : Ty) := {rep : Ty → Type} → Term' rep ty
 
+
+def  lxx : Term' rep (fn nat nat) := .abst (fun x => .var x)
+--#eval pretty lxx
 
 def add : Term (fn nat (fn nat nat)) :=
   .abst fun x => .abst fun y => .plus (.var x) (.var y)
@@ -103,6 +106,7 @@ def pretty (e : Term' (fun _ => String) ty) (i : Nat := 1) : String :=
   | .let a b  =>
     let x := s!"x_{i}"
     s!"(let {x} := {pretty a i}; => {pretty (b x) (i+1)}"
+
 
 #eval pretty three_the_hard_way
 
