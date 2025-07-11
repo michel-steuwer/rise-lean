@@ -67,24 +67,33 @@ syntax:10 rise_data "×" rise_data : rise_data
 syntax "idx" "[" num "]" :rise_data -- todo: not num, see above
 syntax "(" rise_data ")" : rise_data
 
-partial def elabRiseData : Syntax → MetaM Expr
-  | `(rise_data| $n:num · $d:rise_data) => do
-    let d ← elabRiseData d
-    mkAppM ``RiseData.array  #[mkNatLit n.getNat, d]
-  | `(rise_data| float) => mkAppM ``RiseData.scalar #[]
-  | `(rise_data| $l:rise_data × $r:rise_data) => do
-    let l ← elabRiseData l
-    let r ← elabRiseData r
-    mkAppM ``RiseData.pair  #[l, r]
-  | `(rise_data| ($d:rise_data)) => elabRiseData d
-  | _ => throwUnsupportedSyntax
+syntax "[RiseT|" rise_data "]" : term
 
-elab "test_elabRiseData " l:rise_data : term => elabRiseData l
+macro_rules
+  | `([RiseT| float]) => `(RiseData.scalar)
+  | `([RiseT| $n:num · $d:rise_data]) => `(RiseData.array $n [RiseT| $d])
+  | `([RiseT| $l:rise_data × $r:rise_data]) => `(RiseData.pair [RiseT| $l] [RiseT| $r])
+  | `([RiseT| ($d:rise_data)]) => `([RiseT| $d])
 
-#reduce test_elabRiseData 4·5·float
+open PrettyPrinter Delaborator SubExpr
+set_option pp.rawOnError true
+@[app_unexpander RiseData.array]
+def unexpandRiseDataArray : Unexpander
+  | `($(_) $n $r) => `($n · $r)
+  | _ => throw ()
 
-#reduce test_elabRiseData 1·2·float × 3·4·float
-#reduce test_elabRiseData (1·2·float) × (3·4·float)
+@[app_unexpander RiseData.scalar]
+def unexpandRiseDataScalar : Unexpander
+  | `($(_)) => `(rise_data| float)
+
+@[app_unexpander RiseData.pair]
+def unexpandRiseDataPair : Unexpander
+  | `($(_) $l $r) => `(($l) × ($r))
+  | _ => throw ()
+
+#reduce [RiseT| 4·5·float]
+#reduce [RiseT| 1·2·float × 3·4·float]
+#check [RiseT| (1·2·float) × (3·4·float)]
 
 
 inductive RiseLit
