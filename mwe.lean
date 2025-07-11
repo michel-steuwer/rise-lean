@@ -23,12 +23,19 @@ def identity : LambTerm' rep (.fn .nat .nat) :=
 
 #check identity
 
+
+open LambType
+
+def LambType.toExpr : LambType → Expr
+  | .nat => mkConst ``LambType.nat
+  | .fn a b => mkAppN (mkConst ``LambType.fn) #[a.toExpr, b.toExpr]
+
+
 declare_syntax_cat                  lamb_expr
 syntax "lamb" ident "." lamb_expr : lamb_expr
 syntax ident                      : lamb_expr
 syntax lamb_expr lamb_expr        : lamb_expr
 syntax num                        : lamb_expr
-syntax "plus" : lamb_expr
 
 -- TODO: i wonder if the manual context management is necessary at all?
 abbrev ElabCtx := List (Name × Expr × Expr) -- name, fvar, and lambtype
@@ -47,18 +54,14 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
       let term := mkAppN (mkConst ``LambTerm'.abst) #[rep, domType, ranType, abstFn]
       return (term, fnType)
 
-  | `(lamb_expr| plus) => do
-    match ctx.find? (fun (name, _, _) => name == "plus".toName) with
-    | some (_, fvar, lambType) =>
-      return (fvar, lambType)
-    | none => throwError s!"unknown identifier plus"
-
 
   | `(lamb_expr| $x:ident) => do
     match ctx.find? (fun (name, _, _) => name == x.getId) with
-    | some (_, fvar, lambType) =>
-      let term := mkAppN (mkConst ``LambTerm'.var) #[rep, lambType, fvar]
-      return (term, lambType)
+    | some (_, e, t) =>
+      match e.getAppFn with
+      | .const ``LambTerm'.prim _ => return (e, t)
+      | _ => let term := mkAppN (mkConst ``LambTerm'.var) #[rep, t, e]
+             return (term, t)
     | none => throwErrorAt x s!"unknown identifier {x}"
 
 
@@ -79,32 +82,32 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
   | _ => throwUnsupportedSyntax
 
 
+def mkPrim (name : String) (t : LambType) (rep: Expr) :=
+  let t := t.toExpr
+  (name.toName, mkAppN (mkConst ``LambTerm'.prim) #[rep, t, mkStrLit name], t)
+
 elab "[lamb|" l:lamb_expr "]" : term => do
   -- creates implicit parameter rep. otherwise result contains metavariable, which AppBuilder doesn't like
   let repMVar ← mkFreshExprMVar
                   (← mkArrow (mkConst ``LambType) (mkSort levelOne))
                   (userName := "rep".toName)
   let context : ElabCtx := [
-    -- adding "primitive" to context. could be made nicer with a LambType.toExpr.
-    ("plus".toName,
-     mkAppN (mkConst ``LambTerm'.prim) #[repMVar,
-                  mkAppN (mkConst ``LambType.fn)
-                  #[mkConst ``LambType.nat, mkConst ``LambType.nat],
-                  mkStrLit "plus"
-                  ],
-     mkAppN (mkConst ``LambType.fn)
-             #[mkConst ``LambType.nat, mkConst ``LambType.nat]),
-  ]
+    -- adding "primitives" to context.
+    ("plus", (fn nat nat)),
+    ("mult", (fn nat nat)),
+    -- ...
+  ].map (fun (n, t) => mkPrim n t repMVar)
+
   let (term, _) ← elabLamb l repMVar context
   return term
 
 --set_option pp.explicit true
-open LambType
-
-
 #check [lamb| 3]
 
-#check [lamb| lamb x . z ]
+#check [lamb| lamb x . x ]
+
+
+#check [lamb| plus ]
 
 
 #check [lamb| lamb x . lamb y . plus x ]
