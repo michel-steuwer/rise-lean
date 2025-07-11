@@ -31,11 +31,12 @@ def LambType.toExpr : LambType → Expr
   | .fn a b => mkAppN (mkConst ``LambType.fn) #[a.toExpr, b.toExpr]
 
 
-declare_syntax_cat                  lamb_expr
-syntax "lamb" ident "." lamb_expr : lamb_expr
-syntax ident                      : lamb_expr
-syntax lamb_expr:10 lamb_expr:11        : lamb_expr
-syntax num                        : lamb_expr
+declare_syntax_cat                    lamb_expr
+syntax "lamb" ident "." lamb_expr   : lamb_expr
+syntax ident                        : lamb_expr
+syntax:10 lamb_expr:10 lamb_expr:20 : lamb_expr
+syntax num                          : lamb_expr
+syntax "(" lamb_expr ")"            : lamb_expr
 
 -- TODO: i wonder if the manual context management is necessary at all?
 abbrev ElabCtx := List (Name × Expr × Expr) -- name, fvar, and lambtype
@@ -65,22 +66,26 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
     | none => throwErrorAt x s!"unknown identifier {x}"
 
 
+  | `(lamb_expr| ($e:lamb_expr)) => do
+      elabLamb e rep ctx
 
   | `(lamb_expr| $e1s:lamb_expr $e2s:lamb_expr) => do
       let (e1, e1Type) ← elabLamb e1s rep ctx
       let (e2, e2Type) ← elabLamb e2s rep ctx
 
-      -- TODO: check e1 is .fn, get dom type from there
-      -- throwError e1Type.getAppFn
-      match e1Type.getAppFn with
-      | .const ``LambType.fn _ => throwErrorAt e1s "{e1} is not a function!"
-      | _ => throwError "hi"
+      match (e1Type.getAppFn, e1Type.getAppArgs) with
+      | (.const ``LambType.fn _, args) =>
+        let domType := args[0]!
+        let ranType := args[1]!
 
-      let domType := mkConst ``LambType.nat -- todo
-      let ranType := mkConst ``LambType.nat -- todo
-      let term := mkAppN (mkConst ``LambTerm'.app) #[rep, domType, ranType, e1, e2]
-      -- TODO: get e1 range type
-      return (term, e1Type)
+        unless ← isDefEq domType e2Type do -- ← type equality checking!
+          -- throwAppTypeMismatch e1 e2 -- TODO: maybe buitin lean errors would be nice here
+          throwErrorAt e2s s!"function argument has type {← ppExpr e2Type} but is expected to have type {← ppExpr domType}"
+
+        let term := mkAppN (mkConst ``LambTerm'.app) #[rep, domType, ranType, e1, e2]
+        return (term, ranType)
+      | _ =>
+        throwErrorAt e1s s!"{← ppExpr e1} is not a function, it has type {← ppExpr e1Type}" -- same, builtin errors might be nice
 
   | `(lamb_expr| $n:num) => do
     let natType := mkConst ``LambType.nat
@@ -117,10 +122,11 @@ elab "[lamb|" l:lamb_expr "]" : term => do
 #check [lamb| lamb x . x ]
 
 #check [lamb| inc 3 ]
-
+#check [lamb| (plus 1) 2]
+#check [lamb| plus 1 ]
 
 example : LambTerm (fn nat nat) := [lamb| lamb x . x]
-example : LambTerm (nat)        := [lamb| plus 1 2]
+example : LambTerm (nat)        := [lamb| (plus 1) 2]
 
 #check [lamb| lamb x . lamb y . plus x ]
 
