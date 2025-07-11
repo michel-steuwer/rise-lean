@@ -34,7 +34,7 @@ def LambType.toExpr : LambType → Expr
 declare_syntax_cat                  lamb_expr
 syntax "lamb" ident "." lamb_expr : lamb_expr
 syntax ident                      : lamb_expr
-syntax lamb_expr lamb_expr        : lamb_expr
+syntax lamb_expr:10 lamb_expr:11        : lamb_expr
 syntax num                        : lamb_expr
 
 -- TODO: i wonder if the manual context management is necessary at all?
@@ -66,13 +66,21 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
 
 
 
-  | `(lamb_expr| $e1:lamb_expr $e2:lamb_expr) => do
-      let (e1, e1Type) ← elabLamb e1 rep ctx
-      let (e2, e2Type) ← elabLamb e2 rep ctx
+  | `(lamb_expr| $e1s:lamb_expr $e2s:lamb_expr) => do
+      let (e1, e1Type) ← elabLamb e1s rep ctx
+      let (e2, e2Type) ← elabLamb e2s rep ctx
 
       -- TODO: check e1 is .fn, get dom type from there
-      -- let term := mkAppN (mkConst ``LambTerm'.app) #[rep, e1, e2]
-      return (e1, e1Type)
+      -- throwError e1Type.getAppFn
+      match e1Type.getAppFn with
+      | .const ``LambType.fn _ => throwErrorAt e1s "{e1} is not a function!"
+      | _ => throwError "hi"
+
+      let domType := mkConst ``LambType.nat -- todo
+      let ranType := mkConst ``LambType.nat -- todo
+      let term := mkAppN (mkConst ``LambTerm'.app) #[rep, domType, ranType, e1, e2]
+      -- TODO: get e1 range type
+      return (term, e1Type)
 
   | `(lamb_expr| $n:num) => do
     let natType := mkConst ``LambType.nat
@@ -93,8 +101,10 @@ elab "[lamb|" l:lamb_expr "]" : term => do
                   (userName := "rep".toName)
   let context : ElabCtx := [
     -- adding "primitives" to context.
-    ("plus", (fn nat nat)),
-    ("mult", (fn nat nat)),
+    ("plus", fn nat <| fn nat nat),
+    ("mult", fn nat <| fn nat nat),
+    ("inc",  fn nat nat),
+    ("one",  nat)
     -- ...
   ].map (fun (n, t) => mkPrim n t repMVar)
 
@@ -106,9 +116,11 @@ elab "[lamb|" l:lamb_expr "]" : term => do
 
 #check [lamb| lamb x . x ]
 
+#check [lamb| inc 3 ]
 
-#check [lamb| plus ]
 
+example : LambTerm (fn nat nat) := [lamb| lamb x . x]
+example : LambTerm (nat)        := [lamb| plus 1 2]
 
 #check [lamb| lamb x . lamb y . plus x ]
 
