@@ -59,9 +59,7 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
     | some (_, fvar, lambType) =>
       let term := mkAppN (mkConst ``LambTerm'.var) #[rep, lambType, fvar]
       return (term, lambType)
-    -- TODO: could probably do better here. the error doesn't show where exactly
-    --       the unknown identifier was found.
-    | none => throwError s!"unknown identifier {x}"
+    | none => throwErrorAt x s!"unknown identifier {x}"
 
 
 
@@ -105,6 +103,9 @@ open LambType
 
 
 #check [lamb| 3]
+
+#check [lamb| lamb x . z ]
+
 
 #check [lamb| lamb x . lamb y . plus x ]
 
