@@ -53,27 +53,46 @@ def main : IO Unit :=
 -- https://github.com/rise-lang/shine/blob/main/src/main/scala/rise/core/Expr.scala
 -- example code benchmarks
 
-inductive RiseData
-  | array  : Nat → RiseData → RiseData
-  | pair   : RiseData → RiseData → RiseData
-  | index  : Nat → RiseData
-  | scalar : RiseData
-  | vector : Nat → RiseData
+--   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)
+-- (definition omits identifiers)
+inductive RiseNat
+  | nat: Nat → RiseNat
 
-declare_syntax_cat rise_data
-syntax:50 num "·" rise_data:50       : rise_data -- todo: not num, but nat expr, potentially with identifiers; also: doesn't work without spaces. workaround?
-syntax:50 "float" :          rise_data
-syntax:10 rise_data "×" rise_data : rise_data
-syntax "idx" "[" num "]" :rise_data -- todo: not num, see above
-syntax "(" rise_data ")" : rise_data
-
-syntax "[RiseT|" rise_data "]" : term
+declare_syntax_cat rise_nat
+syntax num : rise_nat
+syntax ident : rise_nat
+syntax "[RiseN|" rise_nat "]" : term
 
 macro_rules
-  | `([RiseT| float]) => `(RiseData.scalar)
-  | `([RiseT| $n:num · $d:rise_data]) => `(RiseData.array $n [RiseT| $d])
-  | `([RiseT| $l:rise_data × $r:rise_data]) => `(RiseData.pair [RiseT| $l] [RiseT| $r])
-  | `([RiseT| ($d:rise_data)]) => `([RiseT| $d])
+  | `([RiseN| $n:num]) => `(RiseNat.nat $n)
+  | `([RiseN| $x:ident]) => `($x)
+
+--   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
+inductive RiseData
+  | array  : RiseNat → RiseData → RiseData
+  | pair   : RiseData → RiseData → RiseData
+  | index  : RiseNat → RiseData
+  | scalar : RiseData
+  | vector : RiseNat → RiseData
+
+declare_syntax_cat rise_data
+syntax:50 rise_nat "·" rise_data:50       : rise_data -- todo: not num, but nat expr, potentially with identifiers; also: doesn't work without spaces. workaround?
+syntax:50 rise_nat "." rise_data:50       : rise_data -- todo: not num, but nat expr, potentially with identifiers; also: doesn't work without spaces. workaround?
+syntax:50 "float" :          rise_data
+syntax:10 rise_data "×" rise_data : rise_data
+syntax ident : rise_data
+syntax "idx" "[" rise_nat "]" :rise_data -- todo: not num, see above
+syntax "(" rise_data ")" : rise_data
+
+syntax "[RiseD|" rise_data "]" : term
+
+macro_rules
+  | `([RiseD| float]) => `(RiseData.scalar)
+  | `([RiseD| $x:ident]) => `($x)
+  | `([RiseD| $n:rise_nat · $d:rise_data]) => `(RiseData.array [RiseN| $n] [RiseD| $d])
+  | `([RiseD| $n:rise_nat . $d:rise_data]) => `(RiseData.array [RiseN| $n] [RiseD| $d])
+  | `([RiseD| $l:rise_data × $r:rise_data]) => `(RiseData.pair [RiseD| $l] [RiseD| $r])
+  | `([RiseD| ($d:rise_data)]) => `([RiseD| $d])
 
 open PrettyPrinter Delaborator SubExpr
 set_option pp.rawOnError true
@@ -91,37 +110,74 @@ def unexpandRiseDataPair : Unexpander
   | `($(_) $l $r) => `(($l) × ($r))
   | _ => throw ()
 
-#reduce [RiseT| 4·5·float]
-#reduce [RiseT| 1·2·float × 3·4·float]
-#check [RiseT| (1·2·float) × (3·4·float)]
+@[app_unexpander RiseData]
+def unexpandRiseDataPai : Unexpander
+  | `(rise_data| $d) => `([RiseD| $d ])
 
 
-inductive RiseLit
-  | nat : Nat → RiseLit
+#reduce [RiseD| 4·5·float]
+#reduce [RiseD| 1·2·float × 3·4·float]
+#check [RiseD| (1·2·float) × (3·4·float)]
 
-inductive RiseIndex
-  | index : Nat → RiseIndex
+inductive Vect (α : Type _) : Nat → Type _ where
+  | nil  : Vect α 0
+  | cons : α → Vect α n → Vect α (n + 1)
 
--- inductive RiseIdent
---   | var : String → RiseIdent
+#check ∀ x : Nat , Vect _ x
+#check fun (x : Nat) => Vect _ x
+--   κ ::= nat | data                                (Natural Number Kind, Datatype Kind)
+inductive RiseKind
+  | nat
+  | data
 
-declare_syntax_cat rise_lit
-syntax num       : rise_lit
+declare_syntax_cat               rise_kind
+syntax "nat"                   : rise_kind
+syntax "data"                  : rise_kind
+syntax "[RiseK|" rise_kind "]" : term
 
-def elabRiseLit : Syntax → MetaM Expr
-  | `(rise_lit| $n:num) => mkAppM ``RiseLit.nat  #[mkNatLit n.getNat]
-  | _ => throwUnsupportedSyntax
-
-elab "test_elabRiseLit " l:rise_lit : term => elabRiseLit l
-
-#reduce test_elabRiseLit 4     -- RiseLit.nat 4
-
+macro_rules
+  | `([RiseK| nat]) => `(RiseKind.nat)
+  | `([RiseK| data]) => `(RiseKind.data)
 
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 inductive RiseType where
   | any : RiseType
   | data : RiseData → RiseType
   | fn : RiseType → RiseType → RiseType
+  | dfn : (RiseData → RiseType) → RiseType
+  | nfn : (RiseNat → RiseType) → RiseType
+
+declare_syntax_cat                        rise_type
+syntax rise_data                        : rise_type
+syntax:10 rise_type:10 "→" rise_type:20 : rise_type
+syntax "(" rise_type ")" : rise_type
+syntax "{" ident ":" "data" "}" "→" rise_type : rise_type
+syntax "{" rise_nat ":" "nat" "}" "→" rise_type : rise_type
+syntax "[RiseT|" rise_type "]"          : term
+
+
+macro_rules
+  | `([RiseT| $d:rise_data]) => `(RiseType.data [RiseD| $d])
+  | `([RiseT| $l:rise_type → $r:rise_type]) => `(RiseType.fn [RiseT| $l] [RiseT| $r])
+  | `([RiseT| ($t:rise_type)]) => `([RiseT| $t])
+  -- | `([RiseT| {$x:ident : $k:rise_kind} → $t:rise_type]) => `(fun $x => [RiseT| $t])
+  | `([RiseT| {$x:ident : data} → $t:rise_type]) => `(RiseType.dfn fun {$x : RiseData} => [RiseT| $t])
+  | `([RiseT| {$x:ident : nat} → $t:rise_type]) => `(RiseType.nfn fun {$x : RiseNat} => [RiseT| $t])
+      -- let x ← `([RiseN| $x])
+  -- | `([RiseT| {$x:ident : $k:rise_kind} → $t:rise_type]) => `(fun ($x : [RiseK| $k]) => [RiseT| $t])
+
+-- TODO this feels very wrong.
+def rapp (r : RiseType) (e : RiseNat) : RiseType :=
+  match r with
+  | .nfn f => f e
+  | _ => sorry 
+  
+-- set_option pp.explicit true
+#reduce [RiseT| 1·2·float → float × float → float]
+#reduce [RiseT| {x : data} → x ]
+#reduce rapp [RiseT| {n : nat} → {δ1 : data} → {δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2 ] (RiseNat.nat 3)
+
+
 
 --   e ::= fun(x, e) | e (e) | x | l | P             (Abstraction, Application, Identifier, Literal, Primitives)
 inductive RiseExpr' (rep : RiseType → Type) : RiseType → Type
@@ -223,3 +279,20 @@ syntax rise_program rise_program : rise_program
 -- RiseExpr.bin RiseBinOp.add (RiseExpr.lit (RiseLit.nat 1)) (RiseExpr.lit (RiseLit.bool true))
 --
 --
+
+inductive RiseLit
+  | nat : Nat → RiseLit
+
+inductive RiseIndex
+  | index : Nat → RiseIndex
+
+declare_syntax_cat rise_lit
+syntax num       : rise_lit
+
+def elabRiseLit : Syntax → MetaM Expr
+  | `(rise_lit| $n:num) => mkAppM ``RiseLit.nat  #[mkNatLit n.getNat]
+  | _ => throwUnsupportedSyntax
+
+elab "test_elabRiseLit " l:rise_lit : term => elabRiseLit l
+
+#reduce test_elabRiseLit 4     -- RiseLit.nat 4

@@ -57,6 +57,7 @@ partial def elabLamb (stx : Syntax) (rep : Expr) (ctx : ElabCtx) : TermElabM (Ex
 
 
   | `(lamb_expr| $x:ident) => do
+   -- let x ← Term.resolveLocalName x
     match ctx.find? (fun (name, _, _) => name == x.getId) with
     | some (_, e, t) =>
       match e.getAppFn with
