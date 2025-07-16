@@ -110,14 +110,14 @@ def unexpandRiseDataPair : Unexpander
   | `($(_) $l $r) => `(($l) × ($r))
   | _ => throw ()
 
-@[app_unexpander RiseData]
-def unexpandRiseDataPai : Unexpander
-  | `(rise_data| $d) => `([RiseD| $d ])
-
 
 #reduce [RiseD| 4·5·float]
 #reduce [RiseD| 1·2·float × 3·4·float]
-#check [RiseD| (1·2·float) × (3·4·float)]
+#check [RiseD|
+
+(1·2·float) × (3·4·float)
+
+]
 
 inductive Vect (α : Type _) : Nat → Type _ where
   | nil  : Vect α 0
@@ -141,15 +141,15 @@ macro_rules
 
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 inductive RiseType where
-  | any : RiseType
   | data : RiseData → RiseType
   | fn : RiseType → RiseType → RiseType
   | dfn : (RiseData → RiseType) → RiseType
-  | nfn : (RiseNat → RiseType) → RiseType
+--  | nfn : (RiseNat → RiseType) → RiseType
+  | _fn : {t : Type} -> (t -> RiseType) -> RiseType
 
 declare_syntax_cat                        rise_type
 syntax rise_data                        : rise_type
-syntax:10 rise_type:10 "→" rise_type:20 : rise_type
+syntax rise_type "→" rise_type : rise_type
 syntax "(" rise_type ")" : rise_type
 syntax "{" ident ":" "data" "}" "→" rise_type : rise_type
 syntax "{" rise_nat ":" "nat" "}" "→" rise_type : rise_type
@@ -162,19 +162,29 @@ macro_rules
   | `([RiseT| ($t:rise_type)]) => `([RiseT| $t])
   -- | `([RiseT| {$x:ident : $k:rise_kind} → $t:rise_type]) => `(fun $x => [RiseT| $t])
   | `([RiseT| {$x:ident : data} → $t:rise_type]) => `(RiseType.dfn fun {$x : RiseData} => [RiseT| $t])
-  | `([RiseT| {$x:ident : nat} → $t:rise_type]) => `(RiseType.nfn fun {$x : RiseNat} => [RiseT| $t])
+  | `([RiseT| {$x:ident : nat} → $t:rise_type]) => `(RiseType._fn fun {$x : RiseNat} => [RiseT| $t])
       -- let x ← `([RiseN| $x])
   -- | `([RiseT| {$x:ident : $k:rise_kind} → $t:rise_type]) => `(fun ($x : [RiseK| $k]) => [RiseT| $t])
+
+@[app_unexpander RiseType.data]
+def unexpandRiseTypeData : Unexpander
+  | `($(_) $d) => `($d)RiseNat
+  | _ => throw ()
+@[app_unexpander RiseType.fn]
+def unexpandRiseTypeFn : Unexpander
+  | `($(_) $l $r) => `($l → $r)
+  | _ => throw ()
 
 -- TODO this feels very wrong.
 def rapp (r : RiseType) (e : RiseNat) : RiseType :=
   match r with
   | .nfn f => f e
-  | _ => sorry 
-  
+  | _ => sorry
+
 -- set_option pp.explicit true
-#reduce [RiseT| 1·2·float → float × float → float]
+#reduce [RiseT| float → (float → float)]
 #reduce [RiseT| {x : data} → x ]
+#reduce [RiseT| {n : nat} → {δ1 : data} → {δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2 ]
 #reduce rapp [RiseT| {n : nat} → {δ1 : data} → {δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2 ] (RiseNat.nat 3)
 
 

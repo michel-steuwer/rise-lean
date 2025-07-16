@@ -32,7 +32,7 @@ inductive Term
 -- The Lean kernel has a "strict positivity restriction": When defining an inductive type, the type
 -- being defined must not occur to the left of an arrow in the type of a constructor argument. This happens at [1].
 -- It's not allowed because it would break normalization.
--- "We would be able to prove every theorem with an inifinite loop"
+-- "We would be able to prove every theorem with an infinite loop"
 
 def uhoh (t : Term) : Term :=
   match t with
@@ -75,7 +75,7 @@ open Ty (nat fn)
 def Term (ty : Ty) := {rep : Ty → Type} → Term' rep ty
 
 
-def  lxx : Term' rep (fn nat nat) := .abst (fun x => .var x)
+def  lxx : Term (fn nat nat) := .abst (fun x => .var x)
 --#eval pretty lxx
 
 def add : Term (fn nat (fn nat nat)) :=
