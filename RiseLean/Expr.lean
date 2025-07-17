@@ -11,7 +11,7 @@ inductive RExpr where
   | lit (val : Nat)
   | app (fn arg : RExpr)
 
-  | lam (body : RExpr) (binderType : Option RType)
+  | lam (body : RExpr) (binderKind : Option RType)
   | ulam (body : RExpr) (binderType : Option RKind)
 
 abbrev RTypingCtx := Array (Name × Option RType)
@@ -42,12 +42,8 @@ partial def elabRExpr (tctx : RTypingCtx) (kctx : RKindingCtx): Syntax → TermE
     match tctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
     | some idx =>
       mkAppM ``RExpr.bvar #[mkNatLit <| idx, mkStrLit i.getId.toString]
+    -- could give a hint here if we find the identifier in the kinding context.
     | none => throwErrorAt i s!"unknown identifier {mkConst i.getId}"
-    -- | none =>
-    --   match kctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
-    --   | some idx =>
-    --     mkAppM ``RExpr.bvar #[mkNatLit <| idx, mkStrLit i.getId.toString]
-    --   | none => throwErrorAt i s!"unknown identifier {mkConst i.getId}"
 
   | `(rise_expr| fun ( $x:ident , $b:rise_expr )) => do
     let b ← elabRExpr (tctx.push (x.getId, none)) kctx b

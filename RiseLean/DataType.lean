@@ -96,7 +96,8 @@ macro_rules
 inductive RType where
   | bvar (debruijnIndex : Nat) (userName : String)
   | data (dt : RData)
-  | upi (implicit : Bool) (binderType : RKind) (body : RType)
+  -- do we need this distinction?
+  | upi (implicit : Bool) (binderKind : RKind) (body : RType)
   | pi (binderType : RType) (body : RType)
 
 declare_syntax_cat                        rise_type
@@ -108,9 +109,17 @@ syntax "(" ident ":" rise_kind ")" "→" rise_type : rise_type
 
 syntax "[RiseT|" rise_type "]"          : term
 
+-- set_option pp.raw true
+-- set_option pp.raw.maxDepth 10
+
+
+-- i bet this could written be nicer
 macro_rules
-  | `(rise_type| {$x:ident $xs:ident* : $k:rise_kind} → $t:rise_type) => 
-    `(rise_type| {$x : $k} → {$xs* : $k} → $t)
+  | `(rise_type| {$x:ident $y:ident $xs:ident* : $k:rise_kind} → $t:rise_type) =>
+    if xs.size > 0 then
+      `(rise_type| {$x : $k} → {$y : $k} → {$xs* : $k} → $t)
+    else
+      `(rise_type| {$x : $k} → {$y : $k} → $t)
 
 partial def elabRType (kctx : RKindingCtx) : Syntax → TermElabM Expr
   | `(rise_type| $d:rise_data) => do
@@ -132,10 +141,12 @@ partial def elabRType (kctx : RKindingCtx) : Syntax → TermElabM Expr
     let k ← Term.elabTerm k none
     let body ← elabRType (kctx.push (x.getId,k)) t
     mkAppM ``RType.upi #[toExpr false, k, body]
-  | _ => throwUnsupportedSyntax
+  | _ => throwError "hi"
 
 
 elab "[RiseT|" l:rise_type "]" : term => do
+  -- macros run before elab, but we still have to manually expand macros?!
+  let l ← liftMacroM <| expandMacros l
   let kctx : RKindingCtx := #[]
   let term ← elabRType kctx l
   return term
