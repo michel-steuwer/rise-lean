@@ -94,30 +94,54 @@ macro_rules
 
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 inductive RType where
-  | bvar (debruijnIndex : Nat) (userName : Option String)
+  | bvar (debruijnIndex : Nat) (userName : String)
   | data (dt : RData)
-  | pi (implicit : Bool) (body : RType) (binderType : RKind)
+  | upi (implicit : Bool) (binderType : RKind) (body : RType)
+  | pi (binderType : RType) (body : RType)
 
 declare_syntax_cat                        rise_type
-syntax rise_data                        : rise_type
-syntax rise_type "→" rise_type : rise_type
-syntax "(" rise_type ")" : rise_type
-syntax "{" ident ":" "data" "}" "→" rise_type : rise_type
-syntax "{" rise_nat ":" "nat" "}" "→" rise_type : rise_type
+syntax rise_data                                 : rise_type
+syntax rise_type "→" rise_type                   : rise_type
+syntax "(" rise_type ")"                         : rise_type
+syntax "{" ident+ ":" rise_kind "}" "→" rise_type : rise_type
+syntax "(" ident ":" rise_kind ")" "→" rise_type : rise_type
+
 syntax "[RiseT|" rise_type "]"          : term
 
-
+macro_rules
+  | `(rise_type| {$x:ident $xs:ident* : $k:rise_kind} → $t:rise_type) => 
+    `(rise_type| {$x : $k} → {$xs* : $k} → $t)
 
 partial def elabRType (kctx : RKindingCtx) : Syntax → TermElabM Expr
   | `(rise_type| $d:rise_data) => do
     let d ← elabRData kctx d
     mkAppM ``RType.data #[d]
-  -- | `([RiseT| $l:rise_type → $r:rise_type]) => `(RType.fn [RiseT| $l] [RiseT| $r])
-  -- | `([RiseT| ($t:rise_type)]) => `([RiseT| $t])
-  | _ => throwError "hi"
-  -- | _ => throwUnsupportedSyntax
-  -- | `([RiseT| {$x:ident : $k:rise_kind} → $t:rise_type]) => `(fun $x => [RiseT| $t])
-  -- | `([RiseT| {$x:ident : data} → $t:rise_type]) => `(RType.dfn fun {$x : RData} => [RiseT| $t])
-  -- | `([RiseT| {$x:ident : nat} → $t:rise_type]) => `(RType._fn fun {$x : RNat} => [RiseT| $t])
-      -- let x ← `([RiseN| $x])
-  -- | `([RiseT| {$x:ident : $k:rise_kind} → $t:rise_type]) => `(fun ($x : [RiseK| $k]) => [RiseT| $t])
+  | `(rise_type| $l:rise_type → $r:rise_type) => do
+    let t ← elabRType kctx l
+    let body ← elabRType kctx r
+    mkAppM ``RType.pi #[t, body]
+  | `(rise_type| ($t:rise_type)) => do
+    elabRType kctx t
+  | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
+    let k ← `([RiseK| $k])
+    let k ← Term.elabTerm k none
+    let body ← elabRType (kctx.push (x.getId,k)) t
+    mkAppM ``RType.upi #[toExpr true, k, body]
+  | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
+    let k ← `([RiseK| $k])
+    let k ← Term.elabTerm k none
+    let body ← elabRType (kctx.push (x.getId,k)) t
+    mkAppM ``RType.upi #[toExpr false, k, body]
+  | _ => throwUnsupportedSyntax
+
+
+elab "[RiseT|" l:rise_type "]" : term => do
+  let kctx : RKindingCtx := #[]
+  let term ← elabRType kctx l
+  return term
+
+
+  
+#check [RiseT| float]
+#check [RiseT| {δ : data} → δ → δ → δ]
+#check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1]
