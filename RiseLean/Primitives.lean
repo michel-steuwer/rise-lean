@@ -1,3 +1,5 @@
+import RiseLean.DataType
+
 -- High-Level Primitives:
 inductive RiseHighLevelPrimitive
 --         id : {δ : data} → δ → δ
@@ -51,7 +53,3 @@ inductive RiseLowLevelPrimitive
 inductive RisePrimitive
   | RiseHighLevelPrimitive
   | RiseLowLevelPrimitive
-
-
-
-
