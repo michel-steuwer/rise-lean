@@ -41,17 +41,10 @@ syntax:50 rise_nat "." rise_data:50       : rise_data
 syntax:50 "float"                         : rise_data
 syntax:10 rise_data "×" rise_data         : rise_data
 syntax ident                              : rise_data
--- syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when using a var named idx in normal code. possible to scope syntax such that normal code is not affected? i was hoping that syntax_cat is doing that, but it's not.
+syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when using a var named idx in normal code. possible to scope syntax such that normal code is not affected? i was hoping that syntax_cat is doing that, but it's not.
 syntax "(" rise_data ")"                  : rise_data
 
 syntax "[RiseD|" rise_data "]" : term
-
--- macro_rules
---   | `([RiseD| float]) => `(RData.scalar)
---   | `([RiseD| $x:ident]) => `($x)
---   | `([RiseD| $n:rise_nat . $d:rise_data]) => `(RData.array [RiseN| $n] [RiseD| $d])
---   | `([RiseD| $l:rise_data × $r:rise_data]) => `(RData.pair [RiseD| $l] [RiseD| $r])
---   | `([RiseD| ($d:rise_data)]) => `([RiseD| $d])
 
 partial def elabRData (kctx : RKindingCtx) : Syntax → TermElabM Expr
   | `(rise_data| float) =>
@@ -59,19 +52,23 @@ partial def elabRData (kctx : RKindingCtx) : Syntax → TermElabM Expr
 
   | `(rise_data| $x:ident) =>
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
-    | some idx =>
-      mkAppM ``RData.bvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
+    | some index =>
+      mkAppM ``RData.bvar #[mkNatLit <| index, mkStrLit x.getId.toString]
     | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
 
   | `(rise_data| $n:rise_nat . $d:rise_data) => do
-    let nExpr ← elabRNat kctx n
-    let dExpr ← elabRData kctx d
-    return mkApp2 (mkConst ``RData.array) nExpr dExpr
+    let n ← elabRNat kctx n
+    let d ← elabRData kctx d
+    mkAppM ``RData.array #[n, d]
 
   | `(rise_data| $l:rise_data × $r:rise_data) => do
-    let lExpr ← elabRData kctx l
-    let rExpr ← elabRData kctx r
-    return mkApp2 (mkConst ``RData.pair) lExpr rExpr
+    let l ← elabRData kctx l
+    let r ← elabRData kctx r
+    mkAppM ``RData.pair #[l, r]
+
+  | `(rise_data| idx [$n:rise_nat]) => do
+    let n <- elabRNat kctx n
+    mkAppM ``RData.index #[n]
 
   | `(rise_data| ($d:rise_data)) =>
     elabRData kctx d
@@ -116,10 +113,11 @@ syntax "[RiseT|" rise_type "]"          : term
 -- i bet this could written be nicer
 macro_rules
   | `(rise_type| {$x:ident $y:ident $xs:ident* : $k:rise_kind} → $t:rise_type) =>
-    if xs.size > 0 then
-      `(rise_type| {$x : $k} → {$y : $k} → {$xs* : $k} → $t)
-    else
+    match xs with
+    | #[] =>
       `(rise_type| {$x : $k} → {$y : $k} → $t)
+    | _ =>
+      `(rise_type| {$x : $k} → {$y : $k} → {$xs* : $k} → $t)
 
 partial def elabRType (kctx : RKindingCtx) : Syntax → TermElabM Expr
   | `(rise_type| $d:rise_data) => do
@@ -141,11 +139,12 @@ partial def elabRType (kctx : RKindingCtx) : Syntax → TermElabM Expr
     let k ← Term.elabTerm k none
     let body ← elabRType (kctx.push (x.getId,k)) t
     mkAppM ``RType.upi #[toExpr false, k, body]
-  | _ => throwError "hi"
+  | l => dbg_trace l
+      throwError "elab"
 
 
 elab "[RiseT|" l:rise_type "]" : term => do
-  -- macros run before elab, but we still have to manually expand macros?!
+  -- macros run before elab, but we still have to manually expand macros?
   let l ← liftMacroM <| expandMacros l
   let kctx : RKindingCtx := #[]
   let term ← elabRType kctx l

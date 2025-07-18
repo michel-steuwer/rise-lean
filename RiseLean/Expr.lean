@@ -1,5 +1,6 @@
 import Lean
 import RiseLean.DataType
+import RiseLean.Primitives
 
 open Lean Elab Meta
 
@@ -40,8 +41,8 @@ partial def elabRExpr (tctx : RTypingCtx) (kctx : RKindingCtx): Syntax → TermE
 
   | `(rise_expr| $i:ident) => do
     match tctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
-    | some idx =>
-      mkAppM ``RExpr.bvar #[mkNatLit <| idx, mkStrLit i.getId.toString]
+    | some index =>
+      mkAppM ``RExpr.bvar #[mkNatLit <| index, mkStrLit i.getId.toString]
     -- could give a hint here if we find the identifier in the kinding context.
     | none => throwErrorAt i s!"unknown identifier {mkConst i.getId}"
 
@@ -116,6 +117,8 @@ fun(as, fun(bs,
 -- #check [Rise| fun(x : nat, x)]
 
 #check [Rise| fun(x : 5 . float, x)]
+
+#check [Rise| fun(x : nat , 3)]
 
 #check [Rise| fun(n : nat, fun(x : n . float, x))]
 
