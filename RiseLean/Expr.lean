@@ -123,3 +123,17 @@ fun(as, fun(bs,
 #check [Rise| fun(n : nat, fun(x : n . float, x))]
 
 #check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
+
+
+-- elab "getRHLPrimitiveConstructors" : command => do
+--   let env ← getEnv
+--   let indName := `RHLPrimitive
+--   -- match env.find? indName with
+--   -- logInfo m!"{env.find? indName}"
+--   let x := (env.find? indName)
+--   dbg_trace s!"{x}"
+
+#check 1
+
+
+def infer (e: RExpr) : RType := sorry

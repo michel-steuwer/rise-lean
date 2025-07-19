@@ -33,6 +33,21 @@ def ps : Array RHLPrimitive := #[
 
 open RData
 #reduce ps
+
+
+-- Command that prints the constructor names as strings
+-- elab "getRHLPrimitiveConstructors" : command => do
+--   let env ← getEnv
+--   let indName := `RHLPrimitive
+--   -- match env.find? indName with
+--   logInfo m!"{env.find? indName}"
+  -- | some (ConstantInfo.inductInfo indVal) =>
+  --     let ctors := indVal.ctors
+  --     let ctorStrs := ctors.map (fun n => n.toString)
+  --     logInfo m!"Constructors: {ctorStrs}"
+  -- | _ => logError m!"Inductive type {indName} not found or not an inductive type"
+
+
 -- High-Level Primitives:
 --         id : {δ : data} → δ → δ
 --        add : {δ : data} → δ → δ → δ
