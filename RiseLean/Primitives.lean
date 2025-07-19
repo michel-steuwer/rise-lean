@@ -46,6 +46,7 @@ def ps : Array RHLPrimitive := #[
   .generate [RiseT| {n : nat} → {δ : data} → (idx [ n ] → δ) → n . δ],
 ]
 
+#check  [RiseT| {n m : nat} → {δ : data} → n . m . δ → m . n . δ]
 open RData
 #reduce ps
 

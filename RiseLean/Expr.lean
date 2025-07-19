@@ -139,35 +139,3 @@ fun(as, fun(bs,
 
 #check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
 
-
-elab "getRHLPrimitiveConstructors" : command => do
-  let env ← getEnv
-  let indName := `RHLPrimitive
-  
-  match env.find? indName with
-  | none => throwError m!"Inductive type {indName} not found"
-  | some constInfo => 
-    match constInfo with
-    | ConstantInfo.inductInfo indInfo => 
-      let ctorNames := indInfo.ctors
-      let ctorStrings := ctorNames.map Name.toString
-      logInfo m!"Constructor names: {repr ctorStrings}"
-    | _ => throwError m!"{indName} is not an inductive type"
-
-def getInductiveConstructors (indName : Name) : MetaM (List String) := do
-  let env ← getEnv
-  match env.find? indName with
-  | none => throwError m!"Inductive type {indName} not found"
-  | some constInfo => 
-    match constInfo with
-    | ConstantInfo.inductInfo indInfo => 
-      let ctorNames := indInfo.ctors
-      return ctorNames.map Name.toString
-    | _ => throwError m!"{indName} is not an inductive type"
-
-#eval getInductiveConstructors `RHLPrimitive
---
---
-#check 1
-
-

@@ -9,6 +9,7 @@ abbrev MVarCtx := Array (Name × Expr)
 inductive RKind
   | nat
   | data
+deriving BEq, Hashable, Repr
 
 declare_syntax_cat               rise_kind
 syntax "nat"                   : rise_kind
@@ -23,6 +24,7 @@ inductive RNat
   | bvar (deBruijnIndex : Nat) (userName : String)
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
+deriving Repr
 
 declare_syntax_cat rise_nat
 syntax num                    : rise_nat
@@ -37,7 +39,7 @@ partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElab
     | some idx =>
       mkAppM ``RNat.bvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
     | none =>
-      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+      match mctx.findIdx? (λ (name, _) => name == x.getId) with
       | some idx =>
         mkAppM ``RNat.mvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
@@ -56,6 +58,7 @@ inductive RData
   | index  : RNat → RData
   | scalar : RData
   | vector : RNat → RData
+deriving Repr
 
 declare_syntax_cat rise_data
 syntax:50 rise_nat "." rise_data:50       : rise_data
@@ -76,7 +79,7 @@ partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
     | some index =>
       mkAppM ``RData.bvar #[mkNatLit <| index, mkStrLit x.getId.toString]
     | none =>
-      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+      match mctx.findIdx? (λ (name, _) => name == x.getId) with
       | some index =>
         mkAppM ``RData.mvar #[mkNatLit <| index, mkStrLit x.getId.toString]
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
@@ -107,6 +110,7 @@ inductive RType where
   -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
   | upi (binderKind : RKind) (body : RType)
   | pi (binderType : RType) (body : RType)
+deriving Repr
 
   -- | mvar (id : Nat) (userName : String) (kind : RKind)
   -- | bvar (debruijnIndex : Nat) (userName : String)
@@ -193,5 +197,55 @@ def RType.liftmvars (n : Nat) : RType → RType
   | .data dt    => .data (dt.liftmvars n)
 
 
+
+-- def RNat.mapMVars (f : Nat → String → (Nat × String)) : RNat → RNat
+--   | .mvar id un => let (nId, nUn) := f(id un); .mvar nId nUn
+--   | .bvar id un => .bvar id un
+--   | .nat k      => .nat k
+
+-- def RData.mapMVars (f : Nat → String → (Nat × String) ) : RData → RData
+--   | .bvar n un  => .bvar n un
+--   | .mvar id un => .mvar (id + n) un
+--   | .array k d  => .array (k.mapMVars n) (d.mapMVars n)
+--   | .pair l r   => .pair (l.mapMVars n) (r.mapMVars n)
+--   | .index k    => .index (k.mapMVars n)
+--   | .scalar     => .scalar
+--   | .vector k   => .vector (k.mapMVars n)
+
+-- def RType.mapMVars (f : Nat → String → (Nat × String) ) : RType → RType
+--   | .upi bk b   => .upi bk (b.mapMVars n)
+--   | .pi bt b    => .pi (bt.mapMVars n) (b.mapMVars n)
+--   | .data dt    => .data (dt.mapMVars n)
+
   
 #reduce [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].liftmvars 5
+
+
+private def RNat.getmvarsAux : RNat → Array (Nat × String × RKind) → Array (Nat × String × RKind)
+  | .mvar id un, acc => acc.push (id, un, .nat)
+  | .bvar _id _un, acc => acc
+  | .nat _k, acc      => acc
+
+private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Array (Nat × String × RKind)
+  | .bvar _n _un, acc  => acc
+  | .mvar id un, acc => acc.push (id, un, .data)
+  | .array k d, acc  => d.getmvarsAux (k.getmvarsAux acc)
+  | .pair l r, acc   => r.getmvarsAux (l.getmvarsAux acc)
+  | .index k, acc    => k.getmvarsAux acc
+  | .scalar, acc     => acc
+  | .vector k, acc   => k.getmvarsAux acc
+
+
+private def RType.getmvarsAux : RType → Array (Nat × String × RKind) → Array (Nat × String × RKind)
+  | .upi _bk b, acc   => b.getmvarsAux acc
+  | .pi bt b, acc    => b.getmvarsAux (bt.getmvarsAux acc)
+  | .data dt, acc    => dt.getmvarsAux acc
+
+-- now have to deduplicate and sort. very silly approach but it works for now.
+def RType.getmvars (t : RType) : Array (String × RKind) :=
+  let sorted := (t.getmvarsAux #[]).qsort (fun (n1, _, _) (n2, _, _) => n1 ≤ n2)
+  let deduped := sorted.foldl (fun acc x => 
+    if acc.any (fun y => y == x) then acc else acc.push x) #[]
+  deduped.map (fun (_, s, r) => (s, r))
+
+#eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
