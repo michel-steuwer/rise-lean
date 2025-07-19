@@ -14,6 +14,7 @@ inductive RHighLevelPrimitive where
   |      join
   | transpose
   |  generate
+  deriving BEq, Repr
 
 inductive RHLPrimitive where
   |        id : RType -> RHLPrimitive
@@ -30,25 +31,25 @@ inductive RHLPrimitive where
   | transpose : RType -> RHLPrimitive
   |  generate : RType -> RHLPrimitive
 
-def ps : Array RHLPrimitive := #[
-        .id [RiseT| {δ : data} → δ → δ],
-       .add [RiseT| {δ : data} → δ → δ → δ],
-      .mult [RiseT| {δ : data} → δ → δ → δ],
-      .todo [RiseT| {δ : data} → δ → δ → δ],
-       .fst [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1],
-       .snd [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ2],
-       .map [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2],
-    .reduce [RiseT| {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ],
-       .zip [RiseT| {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)],
-     -- .split [RiseT| (n : nat) → {m : nat} → {δ : data} → n * m . δ → n . m . δ],
-      -- .join [RiseT| {n m : nat} → {δ : data} → n . m . δ → n * m . δ],
- .transpose [RiseT| {n m : nat} → {δ : data} → n . m . δ → m . n . δ],
-  .generate [RiseT| {n : nat} → {δ : data} → (idx [ n ] → δ) → n . δ],
+def primitives : Array (RHighLevelPrimitive × RType) := #[
+        (.id, [RiseT| {δ : data} → δ → δ]),
+       (.add, [RiseT| {δ : data} → δ → δ → δ]),
+      (.mult, [RiseT| {δ : data} → δ → δ → δ]),
+      (.todo, [RiseT| {δ : data} → δ → δ → δ]),
+       (.fst, [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1]),
+       (.snd, [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ2]),
+       (.map, [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2]),
+    (.reduce, [RiseT| {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ]),
+       (.zip, [RiseT| {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)]),
+     -- (.split, [RiseT| (n : nat) → {m : nat} → {δ : data} → n * m . δ → n . m . δ]),
+      -- (.join, [RiseT| {n m : nat} → {δ : data} → n . m . δ → n * m . δ]),
+ (.transpose, [RiseT| {n m : nat} → {δ : data} → n . m . δ → m . n . δ]),
+  (.generate, [RiseT| {n : nat} → {δ : data} → (idx [ n ] → δ) → n . δ]),
 ]
 
 #check  [RiseT| {n m : nat} → {δ : data} → n . m . δ → m . n . δ]
 open RData
-#reduce ps
+#reduce primitives
 
 
 -- Command that prints the constructor names as strings

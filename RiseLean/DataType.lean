@@ -24,7 +24,7 @@ inductive RNat
   | bvar (deBruijnIndex : Nat) (userName : String)
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
-deriving Repr
+deriving Repr, BEq
 
 declare_syntax_cat rise_nat
 syntax num                    : rise_nat
@@ -58,7 +58,7 @@ inductive RData
   | index  : RNat → RData
   | scalar : RData
   | vector : RNat → RData
-deriving Repr
+deriving Repr, BEq
 
 declare_syntax_cat rise_data
 syntax:50 rise_nat "." rise_data:50       : rise_data
@@ -110,7 +110,7 @@ inductive RType where
   -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
   | upi (binderKind : RKind) (body : RType)
   | pi (binderType : RType) (body : RType)
-deriving Repr
+deriving Repr, BEq
 
   -- | mvar (id : Nat) (userName : String) (kind : RKind)
   -- | bvar (debruijnIndex : Nat) (userName : String)
@@ -249,3 +249,4 @@ def RType.getmvars (t : RType) : Array (String × RKind) :=
   deduped.map (fun (_, s, r) => (s, r))
 
 #eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
+
