@@ -1,5 +1,20 @@
 import RiseLean.DataType
 
+inductive RHighLevelPrimitive where
+  |        id
+  |       add
+  |      mult
+  |      todo
+  |       fst
+  |       snd
+  |       map
+  |    reduce
+  |       zip
+  |     split
+  |      join
+  | transpose
+  |  generate
+
 inductive RHLPrimitive where
   |        id : RType -> RHLPrimitive
   |       add : RType -> RHLPrimitive
