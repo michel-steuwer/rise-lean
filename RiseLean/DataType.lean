@@ -29,8 +29,22 @@ inductive RData
   | index  : RNat → RData
   | scalar : RData
   | vector : RNat → RData
-deriving Repr, BEq
+deriving Repr
 
+def RData.beq (a : RData) (b : RData) : Bool :=
+    match a, b with
+    | .bvar ia _, .bvar ib _ => ia == ib
+    | .mvar ia _, .mvar ib _ => true -- <- very likely incorrect :D -- ia == ib 
+    | .array na da,.array nb db => na == nb && da.beq db
+    | .pair da1 da2,.pair db1 db2 => da1.beq db1 && da2.beq db2
+    | .index ia,.index ib => ia == ib
+    | .scalar, .scalar => true
+    | .vector na, .vector nb => na == nb
+    | _, _ => false
+
+instance : BEq RData where
+  beq := RData.beq
+  
 inductive Plicity
   | ex
   | im
@@ -57,12 +71,12 @@ instance : ToString RKind where
 instance : ToString RNat where
   toString
     | RNat.bvar idx name => s!"{name}@{idx}"
-    | RNat.mvar id name => s!"?{name}.{id}"
+    | RNat.mvar id name => s!"?{name}_{id}"
     | RNat.nat n => s!"{n}"
 
 def RData.toString : RData → String
   | RData.bvar idx name => s!"{name}@{idx}"
-  | RData.mvar id name => s!"?{name}.{id}"
+  | RData.mvar id name => s!"?{name}_{id}"
   | RData.array n d => s!"{n}.{RData.toString d}"
   | RData.pair d1 d2 => s!"{RData.toString d1} × {RData.toString d2}"
   | RData.index n => s!"idx[{n}]"
@@ -317,21 +331,38 @@ def RType.getmvars (t : RType) : Array (String × RKind) :=
 
 #eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
 
--- x[v → t] -- should ignore username?
-def RType.substdata (x : RType) (v : RData) (t : RType) : RType :=
+
+-- def RType.subst (x : RType) (v : RType) (t : RType) : RType :=
+--   match 
+
+def RData.substdata (x : RData) (v : RData) (t : RData) : RData :=
   match x with
-  | .data dt => if dt == v then t else .data dt
+  | .array n ad => if x == v then t else .array n (ad.substdata v t)
+  | .pair l r => if x == v then t else .pair (l.substdata v t) (r.substdata v t)
+  | _ => if x == v then t else x
+  -- | .bvar
+  -- | .mvar
+  -- | .index
+  -- | .scalar
+  -- | .vector
+
+
+-- x[v → t] -- should ignore username?
+def RType.substdata (x : RType) (v : RData) (t : RData) : RType :=
+  match x with
+  | .data dt => if dt == v then .data t else .data <| dt.substdata v t
   | .upi bk pc un b => .upi bk pc un (b.substdata v t)
   | .pi bt b => .pi (bt.substdata v t) (b.substdata v t)
+
 
 def RType.ismvardata : RType → Bool
   | .data (.mvar ..) => true
   | _ => false
 
-def RType.tryUnifyData (x : RType) (t : RType) : RType :=
-  match x, t with
-  | .data m@(.mvar ..), .data .. => x.substdata m t
-  | _, _ => panic! s!"unexpected unify: {repr x} with {repr t}"
+-- def RType.tryUnifyData (x : RType) (t : RType) : RType :=
+--   match x, t with
+--   | .data m@(.mvar ..), .data .. => x.substdata m t
+--   | _, _ => panic! s!"unexpected unify: {repr x} with {repr t}"
 
 def RType.gettopmvar : RType → Option RData
   | .data m@(.mvar ..) => some m

@@ -27,8 +27,10 @@ abbrev TCtx := Array (String × Option RType)
 --   -- kctx used for explicit type params (like n in split), ignored for now.
 --   (newMctx,kctx,newTctx)
 
-def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Bool :=
-  t1 == t2
+def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Except String Bool :=
+  -- match t1, t2 with
+  -- | .pi bt1 b1, .pi bt2 b2 =>
+  return t1 == t2
 
 partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
   match t with
@@ -37,12 +39,6 @@ partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
     let newMctx := mctx.push (un, bk, none)
     addImplicits newMctx newB
   | x => (mctx, x)
-
--- def tryUnify (mctx : MVCtx) (bt et : RType) : Except String RType :=
---   match bt with
---   | .data (.mvar n s) => return et
---   | _ => Except.error "can't unify {bt} and {et}"
-  
 
 def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except String RType := do
   match e with
@@ -58,16 +54,18 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
     let (newMctx, et) := addImplicits newMctx et
     match ft with
     | .pi blt brt =>
-      let (blk, ek) := (blt.getRKind, et.getRKind)
+      let (blk, ek) := (blt.getRKind, et.getRKind) -- this might be the wrong approach and i should just check the types, not kinds (because k : data => k : type)
       unless blk == ek do
         Except.error s!"kind mismatch: {blt} : {blk} != {et} : {ek}"
+
+      -- needs *much* improvement
       if let some m := blt.gettopmvar then
-        let blt := blt.substdata m et
-      -- let ft := if blt.ismvardata then ft.tryUnifyData et else ft
-        if check newMctx kctx tctx et blt
-        then return brt.substdata m et else Except.error s!"{et} != {blt}"
-      if check newMctx kctx tctx et blt
-      then return brt else Except.error s!"{repr f}{repr e}{blt} != {et}"
+       if let  .data etdt := et then
+        let blt := blt.substdata m etdt
+        let res <- check newMctx kctx tctx et blt
+        if res then return brt.substdata m etdt else Except.error s!"{et} != {blt}"
+      let res <- check newMctx kctx tctx et blt
+      if res then return brt else Except.error s!"{blt} != {et}"
     | .upi bk .im un b =>
       Except.error s!"unexpected upi {ft}"
     | _ => Except.error s!"not a function type: {ft}"
@@ -113,7 +111,7 @@ def infer? (e : RExpr) : Bool :=
   RType.pi (RType.data (RData.scalar)) (RType.data (RData.scalar))
 
 #check [Rise| reduce(add)(0)]
-#eval infer [Rise| reduce(add)(0)]
+#eval toString <| infer [Rise| reduce(add)(0)]
 -- infer reduce(add)(0)
   -- infer reduce(add)
   --     reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n.δ → δ
@@ -126,11 +124,11 @@ def infer? (e : RExpr) : Bool :=
   -- now compare ?δ.1 -> ?δ.1 -> ?δ.1 with ?δ.2 -> ?δ.2 -> ?δ.2    
   -- they are "the same" and should be unified
   -- ?δ.1 == ?δ.2. but we won't need that info anymore (?)
-  -- return ?δ.1 → ?n.0·?δ.1 → δ.0
+  -- return ?δ.1 → ?n.0·?δ.1 → δ.1
 -- now infer 0 : scalar
 -- this fits ?δ.1
 -- unify scalar with ?δ.1
--- so ?δ.1 → ?n.0·?δ.1 → δ.0 becomes scalar → ?n.0·scalar → scalar
+-- so ?δ.1 → ?n.0·?δ.1 → δ.1 becomes scalar → ?n.0·scalar → scalar
 -- so return
 -- ?n.0·scalar → scalar
 -- 
