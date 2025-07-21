@@ -11,6 +11,41 @@ inductive RKind
   | data
 deriving BEq, Hashable, Repr
 
+--   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)
+inductive RNat
+  | bvar (deBruijnIndex : Nat) (userName : String)
+  | mvar (id : Nat) (userName : String)
+  | nat: Nat → RNat
+deriving Repr, BEq
+
+--   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
+inductive RData
+  | bvar (deBruijnIndex : Nat) (userName : String)
+  | mvar (id : Nat) (userName : String)
+  | array  : RNat → RData → RData
+  | pair   : RData → RData → RData
+  | index  : RNat → RData
+  | scalar : RData
+  | vector : RNat → RData
+deriving Repr, BEq
+
+inductive Plicity
+  | ex
+  | im
+deriving Repr, BEq
+
+--   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
+inductive RType where
+  | data (dt : RData)
+  -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
+  | upi (binderKind : RKind) (pc : Plicity) (body : RType)
+  | pi (binderType : RType) (body : RType)
+deriving Repr, BEq
+
+-- only for Check::infer! to be able to panic
+instance : Inhabited RType where
+  default := RType.data .scalar
+
 declare_syntax_cat               rise_kind
 syntax "nat"                   : rise_kind
 syntax "data"                  : rise_kind
@@ -19,12 +54,6 @@ syntax "[RiseK|" rise_kind "]" : term
 macro_rules
   | `([RiseK| nat]) => `(RKind.nat)
   | `([RiseK| data]) => `(RKind.data)
-
-inductive RNat
-  | bvar (deBruijnIndex : Nat) (userName : String)
-  | mvar (id : Nat) (userName : String)
-  | nat: Nat → RNat
-deriving Repr, BEq
 
 declare_syntax_cat rise_nat
 syntax num                    : rise_nat
@@ -39,7 +68,7 @@ partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElab
     | some idx =>
       mkAppM ``RNat.bvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
     | none =>
-      match mctx.findIdx? (λ (name, _) => name == x.getId) with
+      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
       | some idx =>
         mkAppM ``RNat.mvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
@@ -49,16 +78,6 @@ partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElab
   -- | `([RiseN| $n:num]) => `(RNat.nat $n)
 --  | `([RiseN| $x:ident]) => `($x)
 
---   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
-inductive RData
-  | bvar (deBruijnIndex : Nat) (userName : String)
-  | mvar (id : Nat) (userName : String)
-  | array  : RNat → RData → RData
-  | pair   : RData → RData → RData
-  | index  : RNat → RData
-  | scalar : RData
-  | vector : RNat → RData
-deriving Repr, BEq
 
 declare_syntax_cat rise_data
 syntax:50 rise_nat "." rise_data:50       : rise_data
@@ -79,7 +98,7 @@ partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
     | some index =>
       mkAppM ``RData.bvar #[mkNatLit <| index, mkStrLit x.getId.toString]
     | none =>
-      match mctx.findIdx? (λ (name, _) => name == x.getId) with
+      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
       | some index =>
         mkAppM ``RData.mvar #[mkNatLit <| index, mkStrLit x.getId.toString]
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
@@ -104,13 +123,6 @@ partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
   | _ => throwUnsupportedSyntax
 
 
---   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
-inductive RType where
-  | data (dt : RData)
-  -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
-  | upi (binderKind : RKind) (body : RType)
-  | pi (binderType : RType) (body : RType)
-deriving Repr, BEq
 
   -- | mvar (id : Nat) (userName : String) (kind : RKind)
   -- | bvar (debruijnIndex : Nat) (userName : String)
@@ -152,12 +164,12 @@ partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
     let k ← `([RiseK| $k])
     let k ← Term.elabTerm k none
     let body ← elabRType kctx (mctx.push (x.getId,k)) t
-    return body
+    mkAppM ``RType.upi #[k, mkConst ``Plicity.im, body]
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← `([RiseK| $k])
     let k ← Term.elabTerm k none
     let body ← elabRType (kctx.push (x.getId,k)) mctx t
-    mkAppM ``RType.upi #[toExpr false, k, body]
+    mkAppM ``RType.upi #[k, mkConst ``Plicity.ex, body]
   | l => dbg_trace l
       throwError "elab"
 
@@ -174,8 +186,11 @@ elab "[RiseT|" l:rise_type "]" : term => do
   
 #check [RiseT| float]
 #check [RiseT| {δ : data} → δ → δ → δ]
-#check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1]
-
+#check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] 
+#guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] == 
+  RType.upi RKind.data Plicity.im
+        (RType.upi RKind.data Plicity.im
+          ((RType.data ((RData.mvar 1 "δ1").pair (RData.mvar 0 "δ2"))).pi (RType.data (RData.mvar 1 "δ1"))))
 
 def RNat.liftmvars (n : Nat) : RNat → RNat
   | .mvar id un => .mvar (id + n) un
@@ -192,7 +207,7 @@ def RData.liftmvars (n : Nat) : RData → RData
   | .vector k   => .vector (k.liftmvars n)
 
 def RType.liftmvars (n : Nat) : RType → RType
-  | .upi bk b   => .upi bk (b.liftmvars n)
+  | .upi bk pc b   => .upi bk pc (b.liftmvars n)
   | .pi bt b    => .pi (bt.liftmvars n) (b.liftmvars n)
   | .data dt    => .data (dt.liftmvars n)
 
@@ -237,7 +252,7 @@ private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Arr
 
 
 private def RType.getmvarsAux : RType → Array (Nat × String × RKind) → Array (Nat × String × RKind)
-  | .upi _bk b, acc   => b.getmvarsAux acc
+  | .upi _bk _pc b, acc   => b.getmvarsAux acc
   | .pi bt b, acc    => b.getmvarsAux (bt.getmvarsAux acc)
   | .data dt, acc    => dt.getmvarsAux acc
 

@@ -54,25 +54,29 @@ def infer (e : RExpr) : Except String RType :=
   let tctx : TCtx := #[]
   inferAux mctx kctx tctx e
 
-  -- -- this will be improved once i know what i'm doing
-  -- let add := ("add", [RiseT| {δ : data} → δ → δ → δ])
-  -- let map := ("map", [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2])
-
-  -- -- we actually don't want to add primitives from the very beginning, but rather when we see them. because two instances of the same primitive will have different metavariables.
-  -- let (mctx, kctx, tctx) := addPrimitive mctx kctx tctx add.1 add.2
-  -- let (mctx, kctx, tctx) := addPrimitive mctx kctx tctx map.1 map.2
-
-  -- dbg_trace (repr mctx)
-  -- dbg_trace (repr tctx)
-  -- let x := RType.data (RData.scalar)
-  -- dbg_trace (repr x)
-  -- x
-
 -- Q: do we have polymorphism or do we need a type annotation here?
 -- #eval infer [Rise| fun(a, a)]
 
+def infer! (e : RExpr) : RType :=
+  match infer e with
+  | .ok t => t
+  | .error s => panic! s
+
+def infer? (e : RExpr) : Bool :=
+  match infer e with
+  | .ok _ => true
+  | .error _ => false
+
 #eval! infer [Rise| 0]
+#guard infer! [Rise| 0] == (RType.data (RData.scalar))
+
 #eval! infer [Rise| add]
-#eval! infer [Rise| add(0)]
+#guard infer! [Rise| add] == 
+(RType.upi
+  (RKind.data)
+  (Plicity.im)
+  (RType.pi (RType.data (RData.mvar 0 "δ")) (RType.pi (RType.data (RData.mvar 0 "δ")) (RType.data (RData.mvar 0 "δ")))))
+
+#guard !infer? [Rise| add(add)]
 
 -- example programs in shine/src/test/scala/rise/core
