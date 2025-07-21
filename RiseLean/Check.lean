@@ -2,13 +2,12 @@ import RiseLean.Primitives
 import RiseLean.Expr
 import RiseLean.DataType
 
+set_option linter.unusedVariables false
+
 abbrev MVCtx := Array (String × RKind × Option RType)
 abbrev KCtx := Array (String × Option RType)
 abbrev TCtx := Array (String × Option RType)
 
-#check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
-
-#check [Rise| fun(a : 3 . float, add(a)(a))]
 
 
 
@@ -31,17 +30,18 @@ abbrev TCtx := Array (String × Option RType)
 def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Bool :=
   t1 == t2
 
-def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
+partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
   match t with
-  | .upi bk .im b =>
-    let newMctx := mctx.push ("todo", bk, none)
-    addImplicits newMctx b
+  | .upi bk .im un b =>
+    let newB := b.liftmvars mctx.size
+    let newMctx := mctx.push (un, bk, none)
+    addImplicits newMctx newB
   | x => (mctx, x)
 
-def tryUnify (mctx : MVCtx) (bt et : RType) : Except String RType :=
-  match bt with
-  | .data (.mvar n s) => return et
-  | _ => Except.error "can't unify {bt} and {et}"
+-- def tryUnify (mctx : MVCtx) (bt et : RType) : Except String RType :=
+--   match bt with
+--   | .data (.mvar n s) => return et
+--   | _ => Except.error "can't unify {bt} and {et}"
   
 
 def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except String RType := do
@@ -55,18 +55,22 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
     let ft ← inferAux mctx kctx tctx f
     let (newMctx, ft) := addImplicits mctx ft
     let et ← inferAux mctx kctx tctx e
+    let (newMctx, et) := addImplicits newMctx et
     match ft with
     | .pi blt brt =>
+      let (blk, ek) := (blt.getRKind, et.getRKind)
+      unless blk == ek do
+        Except.error s!"kind mismatch: {blt} : {blk} != {et} : {ek}"
       if let some m := blt.gettopmvar then
         let blt := blt.substdata m et
       -- let ft := if blt.ismvardata then ft.tryUnifyData et else ft
         if check newMctx kctx tctx et blt
-        then return brt.substdata m et else Except.error s!"{repr et} != {repr blt}"
+        then return brt.substdata m et else Except.error s!"{et} != {blt}"
       if check newMctx kctx tctx et blt
-      then return brt else Except.error s!"{repr et} != {repr blt}"
-    | .upi bk .im b =>
-      Except.error s!"unexpected upi {repr ft}"
-    | _ => Except.error s!"not a function type: {repr ft}"
+      then return brt else Except.error s!"{repr f}{repr e}{blt} != {et}"
+    | .upi bk .im un b =>
+      Except.error s!"unexpected upi {ft}"
+    | _ => Except.error s!"not a function type: {ft}"
   | _ => Except.error "todo"
 
 
@@ -97,12 +101,59 @@ def infer? (e : RExpr) : Bool :=
 (RType.upi
   (RKind.data)
   (Plicity.im)
+  "δ"
   (RType.pi (RType.data (RData.mvar 0 "δ")) (RType.pi (RType.data (RData.mvar 0 "δ")) (RType.data (RData.mvar 0 "δ")))))
 
-#reduce infer [Rise| add(add)]
+#eval infer [Rise| add(add)]
 #guard !infer? [Rise| add(add)]
 
-#reduce infer [Rise| add(0)]
+#eval infer [Rise| add(0)]
 #guard infer? [Rise| add(0)]
+#guard infer! [Rise| add(0)] ==
+  RType.pi (RType.data (RData.scalar)) (RType.data (RData.scalar))
+
+#check [Rise| reduce(add)(0)]
+#eval infer [Rise| reduce(add)(0)]
+-- infer reduce(add)(0)
+  -- infer reduce(add)
+  --     reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n.δ → δ
+  --        add : {δ : data} → δ → δ → δ
+  -- check reduce(add)
+  -- add n and δ to ctx, add add's δ to ctx. mctx:
+  -- [0]: n
+  -- [1]: δ (reduce)
+  -- [2]: δ (add)
+  -- now compare ?δ.1 -> ?δ.1 -> ?δ.1 with ?δ.2 -> ?δ.2 -> ?δ.2    
+  -- they are "the same" and should be unified
+  -- ?δ.1 == ?δ.2. but we won't need that info anymore (?)
+  -- return ?δ.1 → ?n.0·?δ.1 → δ.0
+-- now infer 0 : scalar
+-- this fits ?δ.1
+-- unify scalar with ?δ.1
+-- so ?δ.1 → ?n.0·?δ.1 → δ.0 becomes scalar → ?n.0·scalar → scalar
+-- so return
+-- ?n.0·scalar → scalar
+-- 
+-- now the last param *must* fit ?n.0·scalar where ?n.0 is a nat.
+
+#check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
+
+#check [Rise| fun(a : 3 . float, add(a)(a))]
 
 -- example programs in shine/src/test/scala/rise/core
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--
+--

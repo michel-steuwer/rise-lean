@@ -9,6 +9,8 @@ abbrev MVarCtx := Array (Name × Expr)
 inductive RKind
   | nat
   | data
+  | type
+  -- | etc
 deriving BEq, Hashable, Repr
 
 --   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)
@@ -38,13 +40,53 @@ deriving Repr, BEq
 inductive RType where
   | data (dt : RData)
   -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
-  | upi (binderKind : RKind) (pc : Plicity) (body : RType)
+  | upi (binderKind : RKind) (pc : Plicity) (userName : String) (body : RType)
   | pi (binderType : RType) (body : RType)
 deriving Repr, BEq
 
 -- only for Check::infer! to be able to panic
 instance : Inhabited RType where
   default := RType.data .scalar
+
+instance : ToString RKind where
+  toString
+    | RKind.nat => "nat"
+    | RKind.data => "data"
+    | RKind.type => "type"
+
+instance : ToString RNat where
+  toString
+    | RNat.bvar idx name => s!"{name}@{idx}"
+    | RNat.mvar id name => s!"?{name}.{id}"
+    | RNat.nat n => s!"{n}"
+
+def RData.toString : RData → String
+  | RData.bvar idx name => s!"{name}@{idx}"
+  | RData.mvar id name => s!"?{name}.{id}"
+  | RData.array n d => s!"{n}.{RData.toString d}"
+  | RData.pair d1 d2 => s!"{RData.toString d1} × {RData.toString d2}"
+  | RData.index n => s!"idx[{n}]"
+  | RData.scalar => "scalar"
+  | RData.vector n => s!"{n}<float>"
+
+instance : ToString RData where
+  toString := RData.toString
+
+instance : ToString Plicity where
+  toString
+    | Plicity.ex => "explicit"
+    | Plicity.im => "implicit"
+
+def RType.toString : RType → String
+  | RType.data dt => RData.toString dt
+  | RType.upi kind pc un body => 
+      let plicityStr := if pc == Plicity.im then "{" else "("
+      let plicityEnd := if pc == Plicity.im then "}" else ")"
+      s!"{plicityStr}{un} : {kind}{plicityEnd} → {RType.toString body}"
+  | RType.pi binderType body => s!"{RType.toString binderType} → {RType.toString body}"
+
+instance : ToString RType where
+  toString := RType.toString
 
 declare_syntax_cat               rise_kind
 syntax "nat"                   : rise_kind
@@ -164,7 +206,7 @@ partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
     let k ← `([RiseK| $k])
     let k ← Term.elabTerm k none
     let body ← elabRType kctx (mctx.push (x.getId,k)) t
-    mkAppM ``RType.upi #[k, mkConst ``Plicity.im, body]
+    mkAppM ``RType.upi #[k, mkConst ``Plicity.im, mkStrLit x.getId.toString, body]
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← `([RiseK| $k])
     let k ← Term.elabTerm k none
@@ -195,8 +237,8 @@ def unexpandRiseDataArray : Unexpander
 #check [RiseT| {δ : data} → δ → δ → δ]
 #check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] 
 #guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] == 
-  RType.upi RKind.data Plicity.im
-        (RType.upi RKind.data Plicity.im
+  RType.upi RKind.data Plicity.im "δ1"
+        (RType.upi RKind.data Plicity.im "δ2"
           ((RType.data ((RData.mvar 1 "δ1").pair (RData.mvar 0 "δ2"))).pi (RType.data (RData.mvar 1 "δ1"))))
 
 
@@ -217,7 +259,7 @@ def RData.liftmvars (n : Nat) : RData → RData
   | .vector k   => .vector (k.liftmvars n)
 
 def RType.liftmvars (n : Nat) : RType → RType
-  | .upi bk pc b   => .upi bk pc (b.liftmvars n)
+  | .upi bk pc un b   => .upi bk pc un (b.liftmvars n)
   | .pi bt b    => .pi (bt.liftmvars n) (b.liftmvars n)
   | .data dt    => .data (dt.liftmvars n)
 
@@ -262,7 +304,7 @@ private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Arr
 
 
 private def RType.getmvarsAux : RType → Array (Nat × String × RKind) → Array (Nat × String × RKind)
-  | .upi _bk _pc b, acc   => b.getmvarsAux acc
+  | .upi _bk _pc _un b, acc   => b.getmvarsAux acc
   | .pi bt b, acc    => b.getmvarsAux (bt.getmvarsAux acc)
   | .data dt, acc    => dt.getmvarsAux acc
 
@@ -279,7 +321,7 @@ def RType.getmvars (t : RType) : Array (String × RKind) :=
 def RType.substdata (x : RType) (v : RData) (t : RType) : RType :=
   match x with
   | .data dt => if dt == v then t else .data dt
-  | .upi bk pc b => .upi bk pc (b.substdata v t)
+  | .upi bk pc un b => .upi bk pc un (b.substdata v t)
   | .pi bt b => .pi (bt.substdata v t) (b.substdata v t)
 
 def RType.ismvardata : RType → Bool
@@ -294,3 +336,9 @@ def RType.tryUnifyData (x : RType) (t : RType) : RType :=
 def RType.gettopmvar : RType → Option RData
   | .data m@(.mvar ..) => some m
   | _ => none
+
+def RType.getRKind : RType → RKind 
+  | .data .. => .data 
+  | _ => .type -- not sure if correct
+  -- never .nat? is my model wrong?
+
