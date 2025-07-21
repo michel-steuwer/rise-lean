@@ -183,6 +183,13 @@ elab "[RiseT|" l:rise_type "]" : term => do
   return term
 
 
+open PrettyPrinter Delaborator SubExpr
+-- set_option pp.rawOnError true
+@[app_unexpander RType.pi]
+def unexpandRiseDataArray : Unexpander
+  | `($(_) $l $r) => `($l → $r)
+  | _ => throw ()
+
   
 #check [RiseT| float]
 #check [RiseT| {δ : data} → δ → δ → δ]
@@ -191,6 +198,9 @@ elab "[RiseT|" l:rise_type "]" : term => do
   RType.upi RKind.data Plicity.im
         (RType.upi RKind.data Plicity.im
           ((RType.data ((RData.mvar 1 "δ1").pair (RData.mvar 0 "δ2"))).pi (RType.data (RData.mvar 1 "δ1"))))
+
+
+
 
 def RNat.liftmvars (n : Nat) : RNat → RNat
   | .mvar id un => .mvar (id + n) un
@@ -265,3 +275,22 @@ def RType.getmvars (t : RType) : Array (String × RKind) :=
 
 #eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
 
+-- x[v → t] -- should ignore username?
+def RType.substdata (x : RType) (v : RData) (t : RType) : RType :=
+  match x with
+  | .data dt => if dt == v then t else .data dt
+  | .upi bk pc b => .upi bk pc (b.substdata v t)
+  | .pi bt b => .pi (bt.substdata v t) (b.substdata v t)
+
+def RType.ismvardata : RType → Bool
+  | .data (.mvar ..) => true
+  | _ => false
+
+def RType.tryUnifyData (x : RType) (t : RType) : RType :=
+  match x, t with
+  | .data m@(.mvar ..), .data .. => x.substdata m t
+  | _, _ => panic! s!"unexpected unify: {repr x} with {repr t}"
+
+def RType.gettopmvar : RType → Option RData
+  | .data m@(.mvar ..) => some m
+  | _ => none
