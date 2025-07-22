@@ -325,6 +325,8 @@ def RType.getmvars (t : RType) : Array (String × RKind) :=
 
 #eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
 
+def RType.countUniqueMVars : RType → Nat := (· |>.getmvars |>.size)
+def RType.countUniqueMVars' : RType → Nat := Array.size ∘ RType.getmvars
 
 -- def RType.subst (x : RType) (v : RType) (t : RType) : RType :=
 --   match 
