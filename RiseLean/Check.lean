@@ -1,6 +1,8 @@
 import RiseLean.Primitives
 import RiseLean.Expr
 import RiseLean.DataType
+import RiseLean.Unification
+import RiseLean.Subst
 
 set_option linter.unusedVariables false
 
@@ -35,7 +37,7 @@ def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Except Str
 partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
   match t with
   | .upi bk .im un b =>
-    let newB := b.liftmvars mctx.size
+    let newB := b--b.liftmvars mctx.size
     let newMctx := mctx.push (un, bk, none)
     addImplicits newMctx newB
   | x => (mctx, x)
@@ -49,23 +51,37 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
     | none => Except.error s!"unknown primitive {repr p}"
   | .app f e =>
     let ft ← inferAux mctx kctx tctx f
+    dbg_trace "--- ft"
+    dbg_trace ft
+    dbg_trace mctx
     let (newMctx, ft) := addImplicits mctx ft
-    let et ← inferAux mctx kctx tctx e
+    dbg_trace ft
+    dbg_trace newMctx
+    dbg_trace "aaa"
+    let et ← inferAux newMctx kctx tctx e
     let (newMctx, et) := addImplicits newMctx et
-    match ft with
+    dbg_trace "--- et"
+    dbg_trace et
+    dbg_trace newMctx
+    dbg_trace "--- et"
+    match ft.liftmvars 1 with
     | .pi blt brt =>
       let (blk, ek) := (blt.getRKind, et.getRKind) -- this might be the wrong approach and i should just check the types, not kinds (because k : data => k : type)
       unless blk == ek do
         Except.error s!"kind mismatch: {blt} : {blk} != {et} : {ek}"
-
-      -- needs *much* improvement
-      if let some m := blt.gettopmvar then
-       if let  .data etdt := et then
-        let blt := blt.substdata m etdt
-        let res <- check newMctx kctx tctx et blt
-        if res then return brt.substdata m etdt else Except.error s!"{et} != {blt}"
-      let res <- check newMctx kctx tctx et blt
-      if res then return brt else Except.error s!"{blt} != {et}"
+      dbg_trace "huhu"
+      dbg_trace blt
+      dbg_trace et
+      match blt.unify et with
+      | some s =>
+        dbg_trace newMctx
+        dbg_trace ft
+        dbg_trace (blt, et)
+        dbg_trace s
+        dbg_trace brt
+        dbg_trace brt.subst s
+        return brt.subst s
+      | none => .error s!"no {blt}, {et}"
     | .upi bk .im un b =>
       Except.error s!"unexpected upi {ft}"
     | _ => Except.error s!"not a function type: {ft}"
@@ -79,7 +95,12 @@ def infer (e : RExpr) : Except String RType :=
   inferAux mctx kctx tctx e
 
 -- Q: do we have polymorphism or do we need a type annotation here?
--- #eval infer [Rise| fun(a, a)]
+-- #eval infer [Rise| fun(a, a)] -- defaults to data
+-- #eval infer [Rise| fun(x : ?dt, x)] -- defaults to data
+-- fun(n, n) --default to nat
+
+
+
 
 def infer! (e : RExpr) : RType :=
   match infer e with
@@ -94,8 +115,12 @@ def infer? (e : RExpr) : Bool :=
 #reduce infer [Rise| 0]
 #guard infer! [Rise| 0] == (RType.data (RData.scalar))
 
-#reduce infer [Rise| add]
-#guard infer! [Rise| add] == 
+
+-- TODO: add int etc.
+example : infer [Rise| 0] = .ok [RiseT| float] := rfl
+
+#eval toString <| infer [Rise| add]
+#guard infer! [Rise| add] ==
 (RType.upi
   (RKind.data)
   (Plicity.im)
@@ -105,7 +130,7 @@ def infer? (e : RExpr) : Bool :=
 #eval infer [Rise| add(add)]
 #guard !infer? [Rise| add(add)]
 
-#eval infer [Rise| add(0)]
+#eval toString <| infer [Rise| add(0)]
 #guard infer? [Rise| add(0)]
 #guard infer! [Rise| add(0)] ==
   RType.pi (RType.data (RData.scalar)) (RType.data (RData.scalar))
@@ -121,7 +146,7 @@ def infer? (e : RExpr) : Bool :=
   -- [0]: n
   -- [1]: δ (reduce)
   -- [2]: δ (add)
-  -- now compare ?δ.1 -> ?δ.1 -> ?δ.1 with ?δ.2 -> ?δ.2 -> ?δ.2    
+  -- now compare ?δ.1 -> ?δ.1 -> ?δ.1 with ?δ.2 -> ?δ.2 -> ?δ.2
   -- they are "the same" and should be unified
   -- ?δ.1 == ?δ.2. but we won't need that info anymore (?)
   -- return ?δ.1 → ?n.0·?δ.1 → δ.1
@@ -131,15 +156,34 @@ def infer? (e : RExpr) : Bool :=
 -- so ?δ.1 → ?n.0·?δ.1 → δ.1 becomes scalar → ?n.0·scalar → scalar
 -- so return
 -- ?n.0·scalar → scalar
--- 
+--
 -- now the last param *must* fit ?n.0·scalar where ?n.0 is a nat.
 
+-- these don't work yet.
+-- i think what we want to have is a "specificity" relation between types that contain metavars.
+-- e.g. ?d1 -> ?d1 is more specific than ?d1 -> ?d2
+-- and ?d1 x ?d2 is more specific than ?d4
+-- and scalar is more specific than ?d7
+--
+-- they are "assignable" though, and we want to continue with the more specific one.
+--
+--   def RType.assignable : RType -> RType -> Option RType
+--
+--
+#eval toString <| infer [Rise| map(id)]
+#eval toString <| infer [Rise| map(add(5))]
+#eval toString <| infer [Rise| map(fst)]
+#eval toString <| infer [Rise| fst]
+#eval toString <| infer [Rise| map(transpose)]
+
+#eval IO.println <| toString <| infer [Rise| map(id)]
 #check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
 
-#check [Rise| fun(a : 3 . float, add(a)(a))]
+-- TODO this or add(a, a)
+-- #check [Rise| fun(a : 3 . float, add a a)]
 
--- example programs in shine/src/test/scala/rise/core
---
+-- TODO: translate example programs in shine/src/test/scala/rise/core
+-- /home/n/tub/masters/shine/src/test/scala/apps
 --
 --
 --

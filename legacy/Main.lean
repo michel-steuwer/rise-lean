@@ -17,7 +17,7 @@ def main : IO Unit :=
 -- RISE
 --
 -- Syntax of Expressions and Types:
---   e ::= fun(x, e) | e (e) | x | l | P             (Abstraction, Application, Identifier, Literal, Primitives)
+--   e ::= fun(x, e) | e (e) | x | l () {TODO: REMOVE P}           (Abstraction, Application, Identifier, Literal, Primitives)
 --   κ ::= nat | data                                (Natural Number Kind, Datatype Kind)
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 --   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)

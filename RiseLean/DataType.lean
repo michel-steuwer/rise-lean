@@ -18,7 +18,7 @@ inductive RNat
   | bvar (deBruijnIndex : Nat) (userName : String)
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
-deriving Repr, BEq
+deriving Repr, BEq, DecidableEq
 
 --   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 inductive RData
@@ -29,21 +29,7 @@ inductive RData
   | index  : RNat → RData
   | scalar : RData
   | vector : RNat → RData
-deriving Repr
-
-def RData.beq (a : RData) (b : RData) : Bool :=
-    match a, b with
-    | .bvar ia _, .bvar ib _ => ia == ib
-    | .mvar ia _, .mvar ib _ => true -- <- very likely incorrect :D -- ia == ib 
-    | .array na da,.array nb db => na == nb && da.beq db
-    | .pair da1 da2,.pair db1 db2 => da1.beq db1 && da2.beq db2
-    | .index ia,.index ib => ia == ib
-    | .scalar, .scalar => true
-    | .vector na, .vector nb => na == nb
-    | _, _ => false
-
-instance : BEq RData where
-  beq := RData.beq
+deriving Repr, BEq, DecidableEq
   
 inductive Plicity
   | ex
@@ -97,7 +83,7 @@ def RType.toString : RType → String
       let plicityStr := if pc == Plicity.im then "{" else "("
       let plicityEnd := if pc == Plicity.im then "}" else ")"
       s!"{plicityStr}{un} : {kind}{plicityEnd} → {RType.toString body}"
-  | RType.pi binderType body => s!"{RType.toString binderType} → {RType.toString body}"
+  | RType.pi binderType body => s!"({RType.toString binderType} → {RType.toString body})"
 
 instance : ToString RType where
   toString := RType.toString
@@ -141,6 +127,7 @@ syntax:50 "float"                         : rise_data
 syntax:10 rise_data "×" rise_data         : rise_data
 syntax ident                              : rise_data
 syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when using a var named idx in normal code. possible to scope syntax such that normal code is not affected? i was hoping that syntax_cat is doing that, but it's not.
+syntax rise_nat "<" "float" ">"        : rise_data
 syntax "(" rise_data ")"                  : rise_data
 
 syntax "[RiseD|" rise_data "]" : term
@@ -172,6 +159,10 @@ partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
   | `(rise_data| idx [$n:rise_nat]) => do
     let n <- elabRNat kctx mctx n
     mkAppM ``RData.index #[n]
+
+  | `(rise_data| $n:rise_nat < float >) => do
+    let n <- elabRNat kctx mctx n
+    mkAppM ``RData.vector #[n]
 
   | `(rise_data| ($d:rise_data)) =>
     elabRData kctx mctx d
@@ -257,6 +248,9 @@ def unexpandRiseDataArray : Unexpander
 
 
 
+def RData.ismvar : RData → Bool
+  | .mvar .. => true
+  | _ => false
 
 def RNat.liftmvars (n : Nat) : RNat → RNat
   | .mvar id un => .mvar (id + n) un
@@ -373,3 +367,31 @@ def RType.getRKind : RType → RKind
   | _ => .type -- not sure if correct
   -- never .nat? is my model wrong?
 
+
+-- can i just count the number of unique metavars?
+-- def RType.assign (l : RType) (r: RType) : Option RType :=
+-- sorry
+
+-- -- these don't work yet.
+-- -- i think what we want to have is a "specificity" relation between types that contain metavars.
+-- -- e.g. ?d1 -> ?d1 is more specific than ?d1 -> ?d2
+-- -- and ?d1 x ?d2 is more specific than ?d4
+-- -- and scalar is more specific than ?d7
+-- --
+-- -- they are "assignable" though, and we want to continue with the more specific one.
+-- --
+-- def RData.assign (l : RData) (r : RData) : Option RData :=
+--   match l, r with
+--   | .mvar .., .mvar .. => l
+--   | .mvar .., _ => r
+--   |  .bvar n1 un1,  .bvar n2 un2  => sorry
+--   | .mvar id1 un1,  .mvar id2 un2 => sorry
+--   |  .array k1 d1,  .array k2 d2  => sorry
+--   |   .pair l1 r1,  .pair l2 r2   => sorry
+--   |     .index k1,  .index k2     => sorry
+--   |       .scalar,  .scalar       => sorry
+--   |    .vector k1,  .vector k2    => sorry
+
+
+
+  

@@ -16,21 +16,6 @@ inductive RHighLevelPrimitive where
   |  generate
   deriving BEq, Repr
 
-inductive RHLPrimitive where
-  |        id : RType -> RHLPrimitive
-  |       add : RType -> RHLPrimitive
-  |      mult : RType -> RHLPrimitive
-  |      todo : RType -> RHLPrimitive
-  |       fst : RType -> RHLPrimitive
-  |       snd : RType -> RHLPrimitive
-  |       map : RType -> RHLPrimitive
-  |    reduce : RType -> RHLPrimitive
-  |       zip : RType -> RHLPrimitive
-  |     split : RType -> RHLPrimitive
-  |      join : RType -> RHLPrimitive
-  | transpose : RType -> RHLPrimitive
-  |  generate : RType -> RHLPrimitive
-
 def primitives : Array (RHighLevelPrimitive × RType) := #[
         (.id, [RiseT| {δ : data} → δ → δ]),
        (.add, [RiseT| {δ : data} → δ → δ → δ]),

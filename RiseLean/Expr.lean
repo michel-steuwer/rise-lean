@@ -10,7 +10,7 @@ import RiseLean.Primitives
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 --   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)
 --   δ ::= n.δ | δ × δ | idx [n] | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
--- 
+--
 
 -- example program
 --   // Matrix Matrix Multiplication in RISE
@@ -99,6 +99,7 @@ partial def elabRExpr (tctx : RTypingCtx) (kctx : RKindingCtx) (mctx : MVarCtx) 
     | "snd" => mkAppM ``RExpr.prim #[mkConst ``RHighLevelPrimitive.snd]
     | "fst" => mkAppM ``RExpr.prim #[mkConst ``RHighLevelPrimitive.fst]
     | "zip" => mkAppM ``RExpr.prim #[mkConst ``RHighLevelPrimitive.zip]
+    | "transpose" => mkAppM ``RExpr.prim #[mkConst ``RHighLevelPrimitive.transpose]
     -- etc... could probably be automated by reflecting on primitive type
     | _ => match tctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
       | some index =>
@@ -158,6 +159,10 @@ elab "[Rise|" l:rise_expr "]" : term => do
 
 --set_option pp.explicit true
 #check [Rise| fun(as, as)]
+
+-- TODO keep prim ident names as ident
+#check [Rise| fun(map, map)]
+
 #check [Rise| fun(as, fun(bs, as(bs)))]
 #check [Rise| fun(as, fun(bs, as(bs (fun(c, c)))))]
 #check [Rise| fun(as, as (fun(as, as)))]
@@ -185,4 +190,3 @@ fun(as, fun(bs,
 #check [Rise| fun(n : nat, fun(x : n . float, x))]
 
 #check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
-
