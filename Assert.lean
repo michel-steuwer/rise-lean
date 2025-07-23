@@ -1,4 +1,4 @@
--- https://github.com/pnwamk/lean4-assert-command/tree/main
+-- from https://github.com/pnwamk/lean4-assert-command/tree/main
 
 import Lean.Elab.Command
 
