@@ -51,35 +51,35 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
     | none => Except.error s!"unknown primitive {repr p}"
   | .app f e =>
     let ft ← inferAux mctx kctx tctx f
-    dbg_trace "--- ft"
-    dbg_trace ft
-    dbg_trace mctx
+    -- dbg_trace "--- ft"
+    -- dbg_trace ft
+    -- dbg_trace mctx
     let (newMctx, ft) := addImplicits mctx ft
-    dbg_trace ft
-    dbg_trace newMctx
-    dbg_trace "aaa"
+    -- dbg_trace ft
+    -- dbg_trace newMctx
+    -- dbg_trace "aaa"
     let et ← inferAux newMctx kctx tctx e
     let (newMctx, et) := addImplicits newMctx et
-    dbg_trace "--- et"
-    dbg_trace et
-    dbg_trace newMctx
-    dbg_trace "--- et"
+    -- dbg_trace "--- et"
+    -- dbg_trace et
+    -- dbg_trace newMctx
+    -- dbg_trace "--- et"
     match ft.liftmvars 1 with
     | .pi blt brt =>
       let (blk, ek) := (blt.getRKind, et.getRKind) -- this might be the wrong approach and i should just check the types, not kinds (because k : data => k : type)
       unless blk == ek do
         Except.error s!"kind mismatch: {blt} : {blk} != {et} : {ek}"
-      dbg_trace "huhu"
-      dbg_trace blt
-      dbg_trace et
+      -- dbg_trace "huhu"
+      -- dbg_trace blt
+      -- dbg_trace et
       match blt.unify et with
       | some s =>
-        dbg_trace newMctx
-        dbg_trace ft
-        dbg_trace (blt, et)
-        dbg_trace s
-        dbg_trace brt
-        dbg_trace brt.subst s
+        -- dbg_trace newMctx
+        -- dbg_trace ft
+        -- dbg_trace (blt, et)
+        -- dbg_trace s
+        -- dbg_trace brt
+        -- dbg_trace brt.subst s
         return brt.subst s
       | none => .error s!"no {blt}, {et}"
     | .upi bk .im un b =>

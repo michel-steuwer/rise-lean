@@ -5,6 +5,9 @@ defaultTargets = ["rise-lean"]
 [[lean_lib]]
 name = "RiseLean"
 
+[[lean_lib]]
+name = "Assert"
+
 [[lean_exe]]
 name = "rise-lean"
 root = "Main"

@@ -201,22 +201,31 @@ partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
   | `(rise_type| $d:rise_data) => do
     let d ← elabRData kctx mctx d
     mkAppM ``RType.data #[d]
+
+  | `(rise_type| ($d:rise_data)) => do
+    let d ← elabRData kctx mctx d
+    mkAppM ``RType.data #[d]
+
   | `(rise_type| $l:rise_type → $r:rise_type) => do
     let t ← elabRType kctx mctx l
     let body ← elabRType kctx mctx r
     mkAppM ``RType.pi #[t, body]
+
   | `(rise_type| ($t:rise_type)) => do
     elabRType kctx mctx t
+
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
     let k ← `([RiseK| $k])
     let k ← Term.elabTerm k none
     let body ← elabRType kctx (mctx.push (x.getId,k)) t
     mkAppM ``RType.upi #[k, mkConst ``Plicity.im, mkStrLit x.getId.toString, body]
+
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← `([RiseK| $k])
     let k ← Term.elabTerm k none
     let body ← elabRType (kctx.push (x.getId,k)) mctx t
     mkAppM ``RType.upi #[k, mkConst ``Plicity.ex, body]
+
   | l => dbg_trace l
       throwError "elab"
 
@@ -237,7 +246,8 @@ def unexpandRiseDataArray : Unexpander
   | `($(_) $l $r) => `($l → $r)
   | _ => throw ()
 
-  
+#check [RiseT| (float × float) → float]    
+#check [RiseT| float × float → float]    
 #check [RiseT| float]
 #check [RiseT| {δ : data} → δ → δ → δ]
 #check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] 
