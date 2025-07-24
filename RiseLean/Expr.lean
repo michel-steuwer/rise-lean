@@ -164,6 +164,7 @@ elab "[Rise|" p:rise_program "]" : term => do
   let p ← liftMacroM <| expandMacros p
   elabRProgram #[] #[] #[] p
 
+set_option hygiene false in
 macro_rules
   | `(rise_decl| import core) => `(rise_decl|
     def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
