@@ -80,7 +80,7 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
         -- dbg_trace s
         -- dbg_trace brt
         -- dbg_trace brt.subst s
-        return brt.subst s
+        return brt.apply s
       | none => .error s!"no {blt}, {et}"
     | .upi bk .im un b =>
       Except.error s!"unexpected upi {ft}"
