@@ -4,8 +4,8 @@ open Lean Elab Meta Command
 abbrev RKindingCtx := Array (Name × Expr)
 abbrev MVarCtx := Array (Name × Expr)
 
-
---   κ ::= nat | data                                (Natural Number Kind, Datatype Kind)
+-- Kind
+--   κ ::= nat | data (Natural Number Kind, Datatype Kind)
 inductive RKind
   | nat
   | data
@@ -13,13 +13,83 @@ inductive RKind
   -- | etc
 deriving BEq, Hashable, Repr
 
---   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)
+instance : ToString RKind where
+  toString
+    | RKind.nat => "nat"
+    | RKind.data => "data"
+    | RKind.type => "type"
+
+declare_syntax_cat rise_kind
+syntax "nat"                   : rise_kind
+syntax "data"                  : rise_kind
+syntax "[RiseK|" rise_kind "]" : term
+
+macro_rules
+  | `([RiseK| nat]) => `(RKind.nat)
+  | `([RiseK| data]) => `(RKind.data)
+
+partial def elabToRKind : Syntax -> TermElabM RKind
+  | `(rise_kind| nat ) => return RKind.nat
+  | `(rise_kind| data ) => return RKind.data
+  | _ => throwUnsupportedSyntax
+
+def RKind.toExpr : RKind -> Expr
+  | RKind.nat => mkConst ``RKind.nat
+  | RKind.data => mkConst ``RKind.data
+  | RKind.type => mkConst ``RKind.type
+
+
+-- Nat
+--   n ::= 0 | n + n | n · n | ... (Natural Number Literals, Binary Operations)
 inductive RNat
   | bvar (deBruijnIndex : Nat) (userName : String)
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
 deriving Repr, BEq
 
+instance : ToString RNat where
+  toString
+    | RNat.bvar idx name => s!"{name}@{idx}"
+    | RNat.mvar id name => s!"?{name}_{id}"
+    | RNat.nat n => s!"{n}"
+
+declare_syntax_cat rise_nat
+syntax num                    : rise_nat
+syntax ident                  : rise_nat
+
+syntax "[RiseN|" rise_nat "]" : term
+
+partial def elabToRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM RNat
+  | `(rise_nat| $n:num) => return RNat.nat n.getNat
+  | `(rise_nat| $x:ident) =>
+    match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+    | some idx =>
+      return RNat.bvar idx x.getId.toString
+    | none =>
+      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+      | some idx =>
+        return RNat.mvar idx x.getId.toString
+      | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
+  | _ => throwUnsupportedSyntax
+
+def RNat.toExpr : RNat → Expr
+  | RNat.bvar deBruijnIndex userName =>
+    let f := mkConst ``RNat.bvar
+    mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
+  | RNat.mvar id userName =>
+    let f := mkConst ``RNat.mvar
+    mkAppN f #[mkNatLit id, mkStrLit userName]
+  | RNat.nat n =>
+    let f := mkConst ``RNat.nat
+    mkAppN f #[mkNatLit n]
+
+partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM Expr
+  | stx => do
+    let n ← elabToRNat kctx mctx stx
+    return RNat.toExpr n
+
+
+-- DataType
 --   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 inductive RData
   | bvar (deBruijnIndex : Nat) (userName : String)
@@ -34,7 +104,7 @@ deriving Repr
 def RData.beq (a : RData) (b : RData) : Bool :=
     match a, b with
     | .bvar ia _, .bvar ib _ => ia == ib
-    | .mvar ia _, .mvar ib _ => true -- <- very likely incorrect :D -- ia == ib 
+    | .mvar ia _, .mvar ib _ => true -- <- very likely incorrect :D -- ia == ib
     | .array na da,.array nb db => na == nb && da.beq db
     | .pair da1 da2,.pair db1 db2 => da1.beq db1 && da2.beq db2
     | .index ia,.index ib => ia == ib
@@ -44,35 +114,6 @@ def RData.beq (a : RData) (b : RData) : Bool :=
 
 instance : BEq RData where
   beq := RData.beq
-  
-inductive Plicity
-  | ex
-  | im
-deriving Repr, BEq
-
---   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
-inductive RType where
-  | data (dt : RData)
-  -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
-  | upi (binderKind : RKind) (pc : Plicity) (userName : String) (body : RType)
-  | pi (binderType : RType) (body : RType)
-deriving Repr, BEq
-
--- only for Check::infer! to be able to panic
-instance : Inhabited RType where
-  default := RType.data .scalar
-
-instance : ToString RKind where
-  toString
-    | RKind.nat => "nat"
-    | RKind.data => "data"
-    | RKind.type => "type"
-
-instance : ToString RNat where
-  toString
-    | RNat.bvar idx name => s!"{name}@{idx}"
-    | RNat.mvar id name => s!"?{name}_{id}"
-    | RNat.nat n => s!"{n}"
 
 def RData.toString : RData → String
   | RData.bvar idx name => s!"{name}@{idx}"
@@ -86,55 +127,6 @@ def RData.toString : RData → String
 instance : ToString RData where
   toString := RData.toString
 
-instance : ToString Plicity where
-  toString
-    | Plicity.ex => "explicit"
-    | Plicity.im => "implicit"
-
-def RType.toString : RType → String
-  | RType.data dt => RData.toString dt
-  | RType.upi kind pc un body => 
-      let plicityStr := if pc == Plicity.im then "{" else "("
-      let plicityEnd := if pc == Plicity.im then "}" else ")"
-      s!"{plicityStr}{un} : {kind}{plicityEnd} → {RType.toString body}"
-  | RType.pi binderType body => s!"{RType.toString binderType} → {RType.toString body}"
-
-instance : ToString RType where
-  toString := RType.toString
-
-declare_syntax_cat               rise_kind
-syntax "nat"                   : rise_kind
-syntax "data"                  : rise_kind
-syntax "[RiseK|" rise_kind "]" : term
-
-macro_rules
-  | `([RiseK| nat]) => `(RKind.nat)
-  | `([RiseK| data]) => `(RKind.data)
-
-declare_syntax_cat rise_nat
-syntax num                    : rise_nat
-syntax ident                  : rise_nat
-
-syntax "[RiseN|" rise_nat "]" : term
-
-partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM Expr
-  | `(rise_nat| $n:num) => mkAppM ``RNat.nat #[mkNatLit n.getNat]
-  | `(rise_nat| $x:ident) =>
-    match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
-    | some idx =>
-      mkAppM ``RNat.bvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
-    | none =>
-      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
-      | some idx =>
-        mkAppM ``RNat.mvar #[mkNatLit <| idx, mkStrLit x.getId.toString]
-      | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
-  | _ => throwUnsupportedSyntax
-
--- macro_rules
-  -- | `([RiseN| $n:num]) => `(RNat.nat $n)
---  | `([RiseN| $x:ident]) => `($x)
-
-
 declare_syntax_cat rise_data
 syntax:50 rise_nat "." rise_data:50       : rise_data
 syntax:50 "float"                         : rise_data
@@ -143,59 +135,115 @@ syntax ident                              : rise_data
 syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when using a var named idx in normal code. possible to scope syntax such that normal code is not affected? i was hoping that syntax_cat is doing that, but it's not.
 syntax "(" rise_data ")"                  : rise_data
 
-syntax "[RiseD|" rise_data "]" : term
-
-partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
-  | `(rise_data| float) =>
-    return mkConst ``RData.scalar
+partial def elabToRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM RData
+  | `(rise_data| float) => return RData.scalar
 
   | `(rise_data| $x:ident) =>
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     | some index =>
-      mkAppM ``RData.bvar #[mkNatLit <| index, mkStrLit x.getId.toString]
+      return RData.bvar index x.getId.toString
     | none =>
       match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
       | some index =>
-        mkAppM ``RData.mvar #[mkNatLit <| index, mkStrLit x.getId.toString]
+        return RData.mvar index x.getId.toString
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
 
   | `(rise_data| $n:rise_nat . $d:rise_data) => do
-    let n ← elabRNat kctx mctx n
-    let d ← elabRData kctx mctx d
-    mkAppM ``RData.array #[n, d]
+    let n ← elabToRNat kctx mctx n
+    let d ← elabToRData kctx mctx d
+    return RData.array n d
 
   | `(rise_data| $l:rise_data × $r:rise_data) => do
-    let l ← elabRData kctx mctx l
-    let r ← elabRData kctx mctx r
-    mkAppM ``RData.pair #[l, r]
+    let l ← elabToRData kctx mctx l
+    let r ← elabToRData kctx mctx r
+    return RData.pair l r
 
   | `(rise_data| idx [$n:rise_nat]) => do
-    let n <- elabRNat kctx mctx n
-    mkAppM ``RData.index #[n]
+    let n <- elabToRNat kctx mctx n
+    return RData.index n
 
   | `(rise_data| ($d:rise_data)) =>
-    elabRData kctx mctx d
+    elabToRData kctx mctx d
 
   | _ => throwUnsupportedSyntax
 
+def RData.toExpr : RData → Expr
+  | RData.scalar => mkConst ``RData.scalar
+  | RData.bvar deBruijnIndex userName =>
+    let f := mkConst ``RData.bvar
+    mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
+  | RData.mvar id userName =>
+    let f := mkConst ``RData.mvar
+    mkAppN f #[mkNatLit id, mkStrLit userName]
+  | RData.array n d =>
+    let f := mkConst ``RData.array
+    mkAppN f #[RNat.toExpr n, RData.toExpr d]
+  | RData.pair l r =>
+    let f := mkConst ``RData.pair
+    mkAppN f #[RData.toExpr l, RData.toExpr r]
+  | RData.index n =>
+    let f := mkConst ``RData.index
+    mkAppN f #[RNat.toExpr n]
+  | RData.vector n =>
+    let f := mkConst ``RData.vector
+    mkAppN f #[RNat.toExpr n]
+
+partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
+  | stx => do
+    let d ← elabToRData kctx mctx stx
+    return RData.toExpr d
 
 
-  -- | mvar (id : Nat) (userName : String) (kind : RKind)
-  -- | bvar (debruijnIndex : Nat) (userName : String)
+-- Im-/ex-plicity of parameters
+
+inductive Plicity
+  | ex
+  | im
+deriving Repr, BEq
+
+instance : ToString Plicity where
+  toString
+    | Plicity.ex => "explicit"
+    | Plicity.im => "implicit"
+
+def Plicity.toExpr : Plicity -> Expr
+  | Plicity.ex => mkConst ``Plicity.ex
+  | Plicity.im => mkConst ``Plicity.im
+
+-- Types
+--   τ ::= δ | τ → τ | (x : κ) → τ (Data Type, Function Type, Dependent Function Type)
+inductive RType where
+  | data (dt : RData)
+  -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
+  | upi (binderKind : RKind) (pc : Plicity) (userName : String) (body : RType)
+  | pi (binderType : RType) (body : RType)
+deriving Repr, BEq
+
+-- only for Check::infer! to be able to panic
+instance : Inhabited RType where
+  default := RType.data .scalar
+
+def RType.toString : RType → String
+  | RType.data dt => RData.toString dt
+  | RType.upi kind pc un body =>
+      let plicityStr := if pc == Plicity.im then "{" else "("
+      let plicityEnd := if pc == Plicity.im then "}" else ")"
+      s!"{plicityStr}{un} : {kind}{plicityEnd} → {RType.toString body}"
+  | RType.pi binderType body => s!"{RType.toString binderType} → {RType.toString body}"
+
+instance : ToString RType where
+  toString := RType.toString
 
 
-declare_syntax_cat                        rise_type
-syntax rise_data                                 : rise_type
-syntax rise_type "→" rise_type                   : rise_type
-syntax "(" rise_type ")"                         : rise_type
+declare_syntax_cat rise_type
+syntax rise_data                                  : rise_type
+syntax rise_type "→" rise_type                    : rise_type
+syntax "(" rise_type ")"                          : rise_type
 syntax "{" ident+ ":" rise_kind "}" "→" rise_type : rise_type
-syntax "(" ident ":" rise_kind ")" "→" rise_type : rise_type
-
-syntax "[RiseT|" rise_type "]"          : term
+syntax "(" ident ":" rise_kind ")" "→" rise_type  : rise_type
 
 -- set_option pp.raw true
 -- set_option pp.raw.maxDepth 10
-
 
 -- i bet this could be written nicer
 macro_rules
@@ -206,36 +254,50 @@ macro_rules
     | _ =>
       `(rise_type| {$x : $k} → {$y : $k} → {$xs* : $k} → $t)
 
-partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
+
+
+partial def elabToRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM RType
   | `(rise_type| $d:rise_data) => do
-    let d ← elabRData kctx mctx d
-    mkAppM ``RType.data #[d]
+    let d ← elabToRData kctx mctx d
+    return RType.data d
   | `(rise_type| $l:rise_type → $r:rise_type) => do
-    let t ← elabRType kctx mctx l
-    let body ← elabRType kctx mctx r
-    mkAppM ``RType.pi #[t, body]
+    let t ← elabToRType kctx mctx l
+    let body ← elabToRType kctx mctx r
+    return RType.pi t body
   | `(rise_type| ($t:rise_type)) => do
-    elabRType kctx mctx t
+    elabToRType kctx mctx t
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
-    let k ← `([RiseK| $k])
-    let k ← Term.elabTerm k none
-    let body ← elabRType kctx (mctx.push (x.getId,k)) t
-    mkAppM ``RType.upi #[k, mkConst ``Plicity.im, mkStrLit x.getId.toString, body]
+    let k ← elabToRKind k
+    let body ← elabToRType kctx (mctx.push (x.getId, RKind.toExpr k)) t
+    return RType.upi k Plicity.im x.getId.toString body
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
-    let k ← `([RiseK| $k])
-    let k ← Term.elabTerm k none
-    let body ← elabRType (kctx.push (x.getId,k)) mctx t
-    mkAppM ``RType.upi #[k, mkConst ``Plicity.ex, body]
-  | l => dbg_trace l
-      throwError "elab"
+    let k ← elabToRKind k
+    let body ← elabToRType (kctx.push (x.getId, RKind.toExpr k)) mctx t
+    return RType.upi k Plicity.ex x.getId.toString body
+  | _ => throwUnsupportedSyntax
 
+def RType.toExpr : RType -> Expr
+  | RType.data d =>
+    let f := mkConst ``RType.data
+    mkAppN f #[RData.toExpr d]
+  | RType.upi binderKind pc userName body =>
+    let f := mkConst ``RType.upi
+    mkAppN f #[RKind.toExpr binderKind, Plicity.toExpr pc, mkStrLit userName, RType.toExpr body]
+  | RType.pi binderType body =>
+    let f := mkConst ``RType.pi
+    mkAppN f #[RType.toExpr binderType, RType.toExpr body]
 
-elab "[RiseT|" l:rise_type "]" : term => do
+partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
+  | stx => do
+    let t ← elabToRType kctx mctx stx
+    return RType.toExpr t
+
+elab "[RiseT|" t:rise_type "]" : term => do
   -- macros run before elab, but we still have to manually expand macros?
-  let l ← liftMacroM <| expandMacros l
+  let t ← liftMacroM <| expandMacros t
   let kctx : RKindingCtx := #[]
   let mctx: MVarCtx := #[]
-  let term ← elabRType kctx mctx l
+  let term ← elabRType kctx mctx t
   return term
 
 
@@ -246,16 +308,18 @@ def unexpandRiseDataArray : Unexpander
   | `($(_) $l $r) => `($l → $r)
   | _ => throw ()
 
-  
+
 #check [RiseT| float]
+#check [RiseT| float → float ]
 #check [RiseT| {δ : data} → δ → δ → δ]
-#check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] 
-#guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] == 
+#check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1]
+#guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] ==
   RType.upi RKind.data Plicity.im "δ1"
         (RType.upi RKind.data Plicity.im "δ2"
           ((RType.data ((RData.mvar 1 "δ1").pair (RData.mvar 0 "δ2"))).pi (RType.data (RData.mvar 1 "δ1"))))
 
 
+#check [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2]
 
 
 def RNat.liftmvars (n : Nat) : RNat → RNat
@@ -298,7 +362,7 @@ def RType.liftmvars (n : Nat) : RType → RType
 --   | .pi bt b    => .pi (bt.mapMVars n) (b.mapMVars n)
 --   | .data dt    => .data (dt.mapMVars n)
 
-  
+
 #reduce [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].liftmvars 5
 
 
@@ -325,7 +389,7 @@ private def RType.getmvarsAux : RType → Array (Nat × String × RKind) → Arr
 -- now have to deduplicate and sort. very silly approach but it works for now.
 def RType.getmvars (t : RType) : Array (String × RKind) :=
   let sorted := (t.getmvarsAux #[]).qsort (fun (n1, _, _) (n2, _, _) => n1 ≤ n2)
-  let deduped := sorted.foldl (fun acc x => 
+  let deduped := sorted.foldl (fun acc x =>
     if acc.any (fun y => y == x) then acc else acc.push x) #[]
   deduped.map (fun (_, s, r) => (s, r))
 
@@ -333,7 +397,7 @@ def RType.getmvars (t : RType) : Array (String × RKind) :=
 
 
 -- def RType.subst (x : RType) (v : RType) (t : RType) : RType :=
---   match 
+--   match
 
 def RData.substdata (x : RData) (v : RData) (t : RData) : RData :=
   match x with
@@ -368,8 +432,7 @@ def RType.gettopmvar : RType → Option RData
   | .data m@(.mvar ..) => some m
   | _ => none
 
-def RType.getRKind : RType → RKind 
-  | .data .. => .data 
+def RType.getRKind : RType → RKind
+  | .data .. => .data
   | _ => .type -- not sure if correct
   -- never .nat? is my model wrong?
-
