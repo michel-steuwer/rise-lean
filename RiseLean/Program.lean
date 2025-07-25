@@ -8,10 +8,9 @@ syntax "def" ident ":" rise_type  : rise_decl
 syntax rise_decl rise_decl        : rise_decl
 syntax "import" "core"            : rise_decl
 
+-- TODO : a rise program could have more than one expr
 declare_syntax_cat  rise_program
 syntax (rise_decl)? rise_expr : rise_program
-
-
 
 partial def elabRDeclAndRExpr (tctx : RTypingCtx) (kctx : RKindingCtx) (mctx : MVarCtx) (e: Syntax) : Option Syntax → TermElabM Expr
   | some d_stx =>
@@ -51,24 +50,22 @@ macro_rules
   )
 
 #check [Rise|
-def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
-def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
-def add : {δ : data} → δ → δ → δ
-def mult : {δ : data} → δ → δ → δ
-def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
-def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
-def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
-
-fun as => fun bs =>
-     zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
-]
-
-#check [Rise|
 import core
 
 fun as => fun bs =>
      zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
 ]
+
+elab "[RiseC|" p:rise_expr "]" : term => do
+  let p ← `(rise_program| import core $p:rise_expr)
+  let p ← liftMacroM <| expandMacros p
+  elabRProgram #[] #[] #[] p
+
+#check [RiseC|
+fun as => fun bs =>
+     zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
+]
+
 
 #check [Rise|
 def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
@@ -80,4 +77,17 @@ def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
 def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
 
 fun(k : nat) => fun(a : k . float) => reduce add 0 a
+]
+
+#check [Rise|
+def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
+def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
+def add : {δ : data} → δ → δ → δ
+def mult : {δ : data} → δ → δ → δ
+def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
+def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
+def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
+
+fun as => fun bs =>
+     zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
 ]
