@@ -2,26 +2,6 @@ import RiseLean.Type
 import Assert
 import Lean
 
-/--
-  Utility elaborator for Rise Types - adds metavariables to context.
-  "[Rise Type with <identifiers> | <rise_type>]"
-
-  TODO (if necessary): make a difference between variables and metavariables.
-  TODO (if necessary): currently all metavars are just data
--/
-elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
-  let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
-  let kctx : RKindingCtx := #[]
-  let mctx_list ← mvars.toList.mapM (fun var => do
-    let name := var.getId
-    let kind_expr ← `(RKind.data)
-    let kind_elab ← Lean.Elab.Term.elabTerm kind_expr none
-    return (name, kind_elab)
-  )
-  let mctx := mctx_list.toArray
-  elabRType kctx mctx l
-
-
 abbrev Substitution := List (Nat × RData)
 
 def RData.subst (t : RData) (x : Nat) (s : RData) : RData :=
@@ -146,23 +126,44 @@ def RType.unify (l r : RType) : Option Substitution :=
 -- instance : ToString Substitution where
 --   toString := Substitution.toString
 
+
+-- technically, the "_, _" case doesn't check for enough. we would want better checking here, but we trust the algorithm.
 private def unifies (l r : RType) : Bool :=
   match l.unify r, r.unify l with
   | some s1, some s2 =>
-    dbg_trace s1
-    dbg_trace s2
-    dbg_trace (l.apply s1, r.apply s1)
-    dbg_trace (l.apply s2, r.apply s2)
-    dbg_trace (l.apply s1 == r.apply s1)
-    dbg_trace (l.apply s2 == r.apply s2)
+    -- dbg_trace s1
+    -- dbg_trace s2
+    -- dbg_trace (l.apply s1, r.apply s1)
+    -- dbg_trace (l.apply s2, r.apply s2)
+    -- dbg_trace (l.apply s1 == r.apply s1)
+    -- dbg_trace (l.apply s2 == r.apply s2)
     l.apply s1 == r.apply s1 && l.apply s2 == r.apply s2
   | _, _ =>
-    dbg_trace (l.unify r, r.unify l)
+    -- dbg_trace (l.unify r, r.unify l)
     false
 
+/--
+  Utility elaborator for Rise Types - adds metavariables to context.
+  "[Rise Type with <identifiers> | <rise_type>]"
+
+  TODO (if necessary): make a difference between variables and metavariables.
+  TODO (if necessary): currently all metavars are just data
+-/
+elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
+  let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
+  let kctx : RKindingCtx := #[]
+  let mctx_list ← mvars.toList.mapM (fun var => do
+    let name := var.getId
+    let kind_expr ← `(RKind.data)
+    let kind_elab ← Lean.Elab.Term.elabTerm kind_expr none
+    return (name, kind_elab)
+  )
+  let mctx := mctx_list.toArray
+  elabRType kctx mctx l
+
+
 -- tests. note that both params to unify should have the same mvar context.
---
---
+
 #assert (unifies [RTw a     | a                     ] [RTw a     | float                ]) == true
 #assert (unifies [RTw a     | float                 ] [RTw a     | a                    ]) == true
 #assert (unifies [RTw a     | a                     ] [RTw a     | a                    ]) == true
