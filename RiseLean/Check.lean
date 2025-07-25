@@ -1,8 +1,6 @@
-import RiseLean.Primitives
 import RiseLean.Expr
-import RiseLean.DataType
+import RiseLean.Type
 import RiseLean.Unification
-import RiseLean.Subst
 
 set_option linter.unusedVariables false
 
@@ -46,9 +44,9 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
   match e with
   -- | .lam a b => sorry
   | .lit _ => return RType.data .scalar
-  | .prim p => match primitives.find? (λ (pn,t) => p == pn) with
-    | some t => return t.2
-    | none => Except.error s!"unknown primitive {repr p}"
+  -- | .prim p => match primitives.find? (λ (pn,t) => p == pn) with
+    -- | some t => return t.2
+    -- | none => Except.error s!"unknown primitive {repr p}"
   | .app f e =>
     let ft ← inferAux mctx kctx tctx f
     -- dbg_trace "--- ft"
@@ -64,7 +62,7 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
     -- dbg_trace et
     -- dbg_trace newMctx
     -- dbg_trace "--- et"
-    match ft.liftmvars 1 with
+    match ft.liftmvars (et.getmvars.size) with
     | .pi blt brt =>
       let (blk, ek) := (blt.getRKind, et.getRKind) -- this might be the wrong approach and i should just check the types, not kinds (because k : data => k : type)
       unless blk == ek do

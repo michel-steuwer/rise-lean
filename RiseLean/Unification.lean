@@ -1,9 +1,26 @@
--- unification algorithm adapted from
--- https://web.archive.org/web/20250713140859/http://www.cs.cornell.edu/courses/cs3110/2011sp/Lectures/lec26-type-inference/type-inference.htm
-
-import RiseLean.DataType
-import RiseLean.TestSyntax
+import RiseLean.Type
 import Assert
+import Lean
+
+/--
+  Utility elaborator for Rise Types - adds metavariables to context.
+  "[Rise Type with <identifiers> | <rise_type>]"
+
+  TODO (if necessary): make a difference between variables and metavariables.
+  TODO (if necessary): currently all metavars are just data
+-/
+elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
+  let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
+  let kctx : RKindingCtx := #[]
+  let mctx_list ← mvars.toList.mapM (fun var => do
+    let name := var.getId
+    let kind_expr ← `(RKind.data)
+    let kind_elab ← Lean.Elab.Term.elabTerm kind_expr none
+    return (name, kind_elab)
+  )
+  let mctx := mctx_list.toArray
+  elabRType kctx mctx l
+
 
 abbrev Substitution := List (Nat × RData)
 
@@ -38,43 +55,46 @@ def RData.apply (t : RData) (subst : Substitution) : RData :=
 def RType.apply (t : RType) (subst : Substitution) : RType :=
   subst.foldr (fun (id, replacement) acc => acc.subst id replacement) t
 
+-- unification algorithm adapted from
+-- https://web.archive.org/web/20250713140859/http://www.cs.cornell.edu/courses/cs3110/2011sp/Lectures/lec26-type-inference/type-inference.htm
+
 -- we could throw errors here instead of just Option
 mutual
 partial def unifyOne (s t : RData) : Option Substitution :=
   match s, t with
-  | .mvar x _, .mvar y _ => 
+  | .mvar x _, .mvar y _ =>
     if x == y then some [] else some [(x, t)]
-  
+
   | .mvar x _, term | term, .mvar x _ =>
     if term.has x then
       none
     else
       some [(x, term)]
-  
+
   | .bvar n1 un1, .bvar n2 un2 =>
     if n1 == n2 && un1 == un2 then some [] else none
-  
+
   -- todo: rnat unification
   | .array k1 d1, .array k2 d2 =>
-    if k1 == k2 then 
+    if k1 == k2 then
       unify [(d1, d2)]
-    else 
-      none 
-  
+    else
+      none
+
   | .pair l1 r1, .pair l2 r2 =>
-    unify [(l1, l2), (r1, r2)]  
-  
+    unify [(l1, l2), (r1, r2)]
+
   -- todo: rnat unification
   | .index k1, .index k2 =>
     if k1 == k2 then some [] else none
-  
+
   | .scalar, .scalar => some []
-  
+
   -- todo: rnat unification
   | .vector k1, .vector k2 =>
     if k1 == k2 then some [] else none
-  
-  | _, _ => none 
+
+  | _, _ => none
 
 partial def unify (equations : List (RData × RData)) : Option Substitution :=
   match equations with
@@ -93,16 +113,16 @@ mutual partial def unifyOneRType (s t : RType) : Option Substitution :=
   match s, t with
   | .data dt1, .data dt2 =>
     unify [(dt1, dt2)]
-  
+
   | .upi bk1 pc1 un1 body1, .upi bk2 pc2 un2 body2 =>
     if bk1 == bk2 && pc1 == pc2 && un1 == un2 then
       unifyRType [(body1, body2)]
     else
       none
-  
+
   | .pi binderType1 body1, .pi binderType2 body2 =>
     unifyRType [(binderType1, binderType2), (body1, body2)]
-  
+
   | _, _ => none
 
 partial def unifyRType (equations : List (RType × RType)) : Option Substitution :=
@@ -137,11 +157,12 @@ private def unifies (l r : RType) : Bool :=
     dbg_trace (l.apply s2 == r.apply s2)
     l.apply s1 == r.apply s1 && l.apply s2 == r.apply s2
   | _, _ =>
-    dbg_trace (l.unify r, r.unify l) 
+    dbg_trace (l.unify r, r.unify l)
     false
 
 -- tests. note that both params to unify should have the same mvar context.
--- 
+--
+--
 #assert (unifies [RTw a     | a                     ] [RTw a     | float                ]) == true
 #assert (unifies [RTw a     | float                 ] [RTw a     | a                    ]) == true
 #assert (unifies [RTw a     | a                     ] [RTw a     | a                    ]) == true
