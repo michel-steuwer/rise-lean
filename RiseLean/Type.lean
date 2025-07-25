@@ -1,7 +1,6 @@
 import Lean
 open Lean Elab Meta Command
 
-abbrev RKindingCtx := Array (Name × Expr)
 abbrev MVarCtx := Array (Name × Expr)
 
 -- Kind
@@ -19,6 +18,8 @@ instance : ToString RKind where
     | RKind.data => "data"
     | RKind.type => "type"
 
+abbrev RKindingCtx := Array (Name × RKind)
+
 declare_syntax_cat rise_kind
 syntax "nat"                   : rise_kind
 syntax "data"                  : rise_kind
@@ -33,11 +34,13 @@ partial def elabToRKind : Syntax -> TermElabM RKind
   | `(rise_kind| data ) => return RKind.data
   | _ => throwUnsupportedSyntax
 
-def RKind.toExpr : RKind -> Expr
+instance : ToExpr RKind where
+  toExpr e := match e with
   | RKind.nat => mkConst ``RKind.nat
   | RKind.data => mkConst ``RKind.data
   | RKind.type => mkConst ``RKind.type
-
+  toTypeExpr := mkConst ``RKind 
+  
 
 -- Nat
 --   n ::= 0 | n + n | n · n | ... (Natural Number Literals, Binary Operations)
@@ -72,7 +75,8 @@ partial def elabToRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermEl
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
   | _ => throwUnsupportedSyntax
 
-def RNat.toExpr : RNat → Expr
+instance : ToExpr RNat where
+  toExpr e := match e with
   | RNat.bvar deBruijnIndex userName =>
     let f := mkConst ``RNat.bvar
     mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
@@ -82,11 +86,12 @@ def RNat.toExpr : RNat → Expr
   | RNat.nat n =>
     let f := mkConst ``RNat.nat
     mkAppN f #[mkNatLit n]
-
+  toTypeExpr := mkConst ``RNat 
+  
 partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM Expr
   | stx => do
     let n ← elabToRNat kctx mctx stx
-    return RNat.toExpr n
+    return toExpr n
 
 
 -- DataType
@@ -99,21 +104,21 @@ inductive RData
   | index  : RNat → RData
   | scalar : RData
   | vector : RNat → RData
-deriving Repr
+deriving Repr, BEq
 
-def RData.beq (a : RData) (b : RData) : Bool :=
-    match a, b with
-    | .bvar ia _, .bvar ib _ => ia == ib
-    | .mvar ia _, .mvar ib _ => true -- <- very likely incorrect :D -- ia == ib
-    | .array na da,.array nb db => na == nb && da.beq db
-    | .pair da1 da2,.pair db1 db2 => da1.beq db1 && da2.beq db2
-    | .index ia,.index ib => ia == ib
-    | .scalar, .scalar => true
-    | .vector na, .vector nb => na == nb
-    | _, _ => false
+-- def RData.beq (a : RData) (b : RData) : Bool :=
+--     match a, b with
+--     | .bvar ia _, .bvar ib _ => ia == ib
+--     | .mvar ia _, .mvar ib _ => true -- <- very likely incorrect :D -- ia == ib
+--     | .array na da,.array nb db => na == nb && da.beq db
+--     | .pair da1 da2,.pair db1 db2 => da1.beq db1 && da2.beq db2
+--     | .index ia,.index ib => ia == ib
+--     | .scalar, .scalar => true
+--     | .vector na, .vector nb => na == nb
+--     | _, _ => false
 
-instance : BEq RData where
-  beq := RData.beq
+-- instance : BEq RData where
+--   beq := RData.beq
 
 def RData.toString : RData → String
   | RData.bvar idx name => s!"{name}@{idx}"
@@ -172,31 +177,29 @@ partial def elabToRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermEl
 
   | _ => throwUnsupportedSyntax
 
-def RData.toExpr : RData → Expr
-  | RData.scalar => mkConst ``RData.scalar
-  | RData.bvar deBruijnIndex userName =>
-    let f := mkConst ``RData.bvar
-    mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
-  | RData.mvar id userName =>
-    let f := mkConst ``RData.mvar
-    mkAppN f #[mkNatLit id, mkStrLit userName]
-  | RData.array n d =>
-    let f := mkConst ``RData.array
-    mkAppN f #[RNat.toExpr n, RData.toExpr d]
-  | RData.pair l r =>
-    let f := mkConst ``RData.pair
-    mkAppN f #[RData.toExpr l, RData.toExpr r]
-  | RData.index n =>
-    let f := mkConst ``RData.index
-    mkAppN f #[RNat.toExpr n]
-  | RData.vector n =>
-    let f := mkConst ``RData.vector
-    mkAppN f #[RNat.toExpr n]
+instance : ToExpr RData where
+  toExpr := 
+    let rec go : RData → Expr
+    | RData.scalar => mkConst ``RData.scalar
+    | RData.bvar deBruijnIndex userName =>
+      mkAppN (mkConst ``RData.bvar) #[mkNatLit deBruijnIndex, mkStrLit userName]
+    | RData.mvar id userName =>
+      mkAppN (mkConst ``RData.mvar) #[mkNatLit id, mkStrLit userName]
+    | RData.array n d =>
+      mkAppN (mkConst ``RData.array) #[toExpr n, go d]
+    | RData.pair l r =>
+      mkAppN (mkConst ``RData.pair) #[go l, go r]
+    | RData.index n =>
+      mkAppN (mkConst ``RData.index) #[toExpr n]
+    | RData.vector n =>
+      mkAppN (mkConst ``RData.vector) #[toExpr n]
+    go
+  toTypeExpr := mkConst ``RData
 
 partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
   | stx => do
     let d ← elabToRData kctx mctx stx
-    return RData.toExpr d
+    return toExpr d
 
 
 -- Im-/ex-plicity of parameters
@@ -211,10 +214,12 @@ instance : ToString Plicity where
     | Plicity.ex => "explicit"
     | Plicity.im => "implicit"
 
-def Plicity.toExpr : Plicity -> Expr
+instance : ToExpr Plicity where
+  toExpr e := match e with
   | Plicity.ex => mkConst ``Plicity.ex
   | Plicity.im => mkConst ``Plicity.im
-
+  toTypeExpr := mkConst ``Plicity 
+  
 -- Types
 --   τ ::= δ | τ → τ | (x : κ) → τ (Data Type, Function Type, Dependent Function Type)
 inductive RType where
@@ -273,29 +278,34 @@ partial def elabToRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermEl
     elabToRType kctx mctx t
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← elabToRType kctx (mctx.push (x.getId, RKind.toExpr k)) t
+    let body ← elabToRType kctx (mctx.push (x.getId, toExpr k)) t
     return RType.upi k Plicity.im x.getId.toString body
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← elabToRType (kctx.push (x.getId, RKind.toExpr k)) mctx t
+    let body ← elabToRType (kctx.push (x.getId, k)) mctx t
     return RType.upi k Plicity.ex x.getId.toString body
   | _ => throwUnsupportedSyntax
 
-def RType.toExpr : RType -> Expr
-  | RType.data d =>
-    let f := mkConst ``RType.data
-    mkAppN f #[RData.toExpr d]
-  | RType.upi binderKind pc userName body =>
-    let f := mkConst ``RType.upi
-    mkAppN f #[RKind.toExpr binderKind, Plicity.toExpr pc, mkStrLit userName, RType.toExpr body]
-  | RType.pi binderType body =>
-    let f := mkConst ``RType.pi
-    mkAppN f #[RType.toExpr binderType, RType.toExpr body]
+instance : ToExpr RType where
+  toExpr := 
+    let rec go : RType → Expr
+    | RType.data d =>
+      let f := mkConst ``RType.data
+      mkAppN f #[toExpr d]
+    | RType.upi binderKind pc userName body =>
+      let f := mkConst ``RType.upi
+      mkAppN f #[toExpr binderKind, toExpr pc, mkStrLit userName, go body]
+    | RType.pi binderType body =>
+      let f := mkConst ``RType.pi
+      mkAppN f #[go binderType, go body]
+    go
+  toTypeExpr := mkConst ``RType 
 
+  
 partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
   | stx => do
     let t ← elabToRType kctx mctx stx
-    return RType.toExpr t
+    return toExpr t
 
 elab "[RiseT|" t:rise_type "]" : term => do
   -- macros run before elab, but we still have to manually expand macros?
