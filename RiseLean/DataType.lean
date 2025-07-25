@@ -164,8 +164,8 @@ partial def elabToRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermEl
     return RData.index n
 
   | `(rise_data| $n:rise_nat < float >) => do
-    let n <- elabRNat kctx mctx n
-    mkAppM ``RData.vector #[n]
+    let n <- elabToRNat kctx mctx n
+    return RData.vector n
 
   | `(rise_data| ($d:rise_data)) =>
     elabToRData kctx mctx d
