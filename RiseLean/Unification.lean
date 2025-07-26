@@ -1,3 +1,4 @@
+import RiseLean.Prelude
 import RiseLean.Type
 import Assert
 import Lean
@@ -151,12 +152,12 @@ private def unifies (l r : RType) : Bool :=
 -/
 elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
   let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
-  let kctx : RKindingCtx := #[]
+  let kctx : KCtx := #[]
   let mctx_list ← mvars.toList.mapM (fun var => do
     let name := var.getId
-    let kind_expr ← `(RKind.data)
-    let kind_elab ← Lean.Elab.Term.elabTerm kind_expr none
-    return (name, kind_elab)
+    -- let kind_expr ← `(RKind.data)
+    -- let kind_elab ← Lean.Elab.Term.elabTerm kind_expr none
+    return (name, RKind.data, none)
   )
   let mctx := mctx_list.toArray
   elabRType kctx mctx l

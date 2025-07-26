@@ -1,7 +1,20 @@
 import RiseLean.Type
 import RiseLean.Expr
+import RiseLean.Check
 import Lean
 open Lean Elab Meta
+
+
+structure RResult where
+  expr : RExpr
+  type : RType
+
+instance : ToExpr RResult where
+  toExpr r := 
+    let exprExpr := ToExpr.toExpr r.expr
+    let typeExpr := ToExpr.toExpr r.type
+    mkAppN (mkConst ``RResult.mk) #[exprExpr, typeExpr]
+  toTypeExpr := mkConst ``RResult
 
 declare_syntax_cat  rise_decl
 syntax "def" ident ":" rise_type  : rise_decl
@@ -12,21 +25,27 @@ syntax "import" "core"            : rise_decl
 declare_syntax_cat  rise_program
 syntax (rise_decl)? rise_expr : rise_program
 
-partial def elabRDeclAndRExpr (tctx : RTypingCtx) (kctx : RKindingCtx) (mctx : MVarCtx) (e: Syntax) : Option Syntax → TermElabM Expr
+partial def elabRDeclAndRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (e: Syntax) : Option Syntax → TermElabM Expr
   | some d_stx =>
     match d_stx with
     | `(rise_decl| def $x:ident : $t:rise_type $decl:rise_decl ) => do
       let t ← elabToRType kctx mctx t
-      Lean.logInfo m!"found {x.getId} : {t}"
+      -- Lean.logInfo m!"found {x.getId} : {t}"
       elabRDeclAndRExpr (tctx.push (x.getId, t)) kctx mctx e (some decl)
     | `(rise_decl| def $x:ident : $t:rise_type ) => do
       let t ← elabToRType kctx mctx t
-      Lean.logInfo m!"found {x.getId} : {t}"
+      -- Lean.logInfo m!"found {x.getId} : {t}"
       elabRDeclAndRExpr (tctx.push (x.getId, t)) kctx mctx e none
     | _ => throwUnsupportedSyntax
-  | none => elabRExpr tctx kctx mctx e
+  | none => do
+      let e <- elabToRExpr tctx kctx mctx e
+      let t := inferAux mctx kctx tctx e
+      -- return toExpr t
+      match t with
+      | .error s => throwError s
+      | .ok t => return toExpr (RResult.mk e t)
 
-partial def elabRProgram (tctx : RTypingCtx) (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM Expr
+partial def elabRProgram (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM Expr
   | `(rise_program| $d:rise_decl $e:rise_expr ) => do
     elabRDeclAndRExpr tctx kctx mctx e (some d)
   | `(rise_program| $e:rise_expr ) => do
@@ -91,3 +110,7 @@ def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 ×
 fun as => fun bs =>
      zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
 ]
+
+
+#check [RiseC| add(0)]
+#check [RiseC| reduce add(0)]

@@ -1,16 +1,9 @@
 import Lean
+import RiseLean.Prelude
 open Lean Elab Meta Command
 
-abbrev MVarCtx := Array (Name × Expr)
+-- abbrev MVarCtx := Array (Name × Expr)
 
--- Kind
---   κ ::= nat | data (Natural Number Kind, Datatype Kind)
-inductive RKind
-  | nat
-  | data
-  | type
-  -- | etc
-deriving BEq, Hashable, Repr
 
 instance : ToString RKind where
   toString
@@ -18,7 +11,6 @@ instance : ToString RKind where
     | RKind.data => "data"
     | RKind.type => "type"
 
-abbrev RKindingCtx := Array (Name × RKind)
 
 declare_syntax_cat rise_kind
 syntax "nat"                   : rise_kind
@@ -42,13 +34,6 @@ instance : ToExpr RKind where
   toTypeExpr := mkConst ``RKind 
   
 
--- Nat
---   n ::= 0 | n + n | n · n | ... (Natural Number Literals, Binary Operations)
-inductive RNat
-  | bvar (deBruijnIndex : Nat) (userName : String)
-  | mvar (id : Nat) (userName : String)
-  | nat: Nat → RNat
-deriving Repr, BEq, DecidableEq
 
 instance : ToString RNat where
   toString
@@ -62,14 +47,14 @@ syntax ident                  : rise_nat
 
 syntax "[RiseN|" rise_nat "]" : term
 
-partial def elabToRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM RNat
+partial def elabToRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM RNat
   | `(rise_nat| $n:num) => return RNat.nat n.getNat
   | `(rise_nat| $x:ident) =>
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     | some idx =>
       return RNat.bvar idx x.getId.toString
     | none =>
-      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+      match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
       | some idx =>
         return RNat.mvar idx x.getId.toString
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
@@ -88,23 +73,12 @@ instance : ToExpr RNat where
     mkAppN f #[mkNatLit n]
   toTypeExpr := mkConst ``RNat 
   
-partial def elabRNat (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM Expr
+partial def elabRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM Expr
   | stx => do
     let n ← elabToRNat kctx mctx stx
     return toExpr n
 
 
--- DataType
---   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
-inductive RData
-  | bvar (deBruijnIndex : Nat) (userName : String)
-  | mvar (id : Nat) (userName : String)
-  | array  : RNat → RData → RData
-  | pair   : RData → RData → RData
-  | index  : RNat → RData
-  | scalar : RData
-  | vector : RNat → RData
-deriving Repr, BEq
 
 -- def RData.beq (a : RData) (b : RData) : Bool :=
 --     match a, b with
@@ -141,7 +115,7 @@ syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when usi
 syntax rise_nat "<" "float" ">"        : rise_data
 syntax "(" rise_data ")"                  : rise_data
 
-partial def elabToRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM RData
+partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RData
   | `(rise_data| float) => return RData.scalar
 
   | `(rise_data| $x:ident) =>
@@ -149,7 +123,7 @@ partial def elabToRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermEl
     | some index =>
       return RData.bvar index x.getId.toString
     | none =>
-      match mctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+      match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
       | some index =>
         return RData.mvar index x.getId.toString
       | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
@@ -196,18 +170,10 @@ instance : ToExpr RData where
     go
   toTypeExpr := mkConst ``RData
 
-partial def elabRData (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
+partial def elabRData (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM Expr
   | stx => do
     let d ← elabToRData kctx mctx stx
     return toExpr d
-
-
--- Im-/ex-plicity of parameters
-
-inductive Plicity
-  | ex
-  | im
-deriving Repr, BEq
 
 instance : ToString Plicity where
   toString
@@ -220,14 +186,6 @@ instance : ToExpr Plicity where
   | Plicity.im => mkConst ``Plicity.im
   toTypeExpr := mkConst ``Plicity 
   
--- Types
---   τ ::= δ | τ → τ | (x : κ) → τ (Data Type, Function Type, Dependent Function Type)
-inductive RType where
-  | data (dt : RData)
-  -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
-  | upi (binderKind : RKind) (pc : Plicity) (userName : String) (body : RType)
-  | pi (binderType : RType) (body : RType)
-deriving Repr, BEq
 
 -- only for Check::infer! to be able to panic
 instance : Inhabited RType where
@@ -266,7 +224,7 @@ macro_rules
 
 
 
-partial def elabToRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM RType
+partial def elabToRType (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RType
   | `(rise_type| $d:rise_data) => do
     let d ← elabToRData kctx mctx d
     return RType.data d
@@ -278,11 +236,11 @@ partial def elabToRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermEl
     elabToRType kctx mctx t
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← elabToRType kctx (mctx.push (x.getId, toExpr k)) t
+    let body ← elabToRType kctx (mctx.push (x.getId, k, none)) t
     return RType.upi k Plicity.im x.getId.toString body
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← elabToRType (kctx.push (x.getId, k)) mctx t
+    let body ← elabToRType (kctx.push (x.getId, some k)) mctx t
     return RType.upi k Plicity.ex x.getId.toString body
   | _ => throwUnsupportedSyntax
 
@@ -302,7 +260,7 @@ instance : ToExpr RType where
   toTypeExpr := mkConst ``RType 
 
   
-partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElabM Expr
+partial def elabRType (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM Expr
   | stx => do
     let t ← elabToRType kctx mctx stx
     return toExpr t
@@ -310,8 +268,8 @@ partial def elabRType (kctx : RKindingCtx) (mctx : MVarCtx): Syntax → TermElab
 elab "[RiseT|" t:rise_type "]" : term => do
   -- macros run before elab, but we still have to manually expand macros?
   let t ← liftMacroM <| expandMacros t
-  let kctx : RKindingCtx := #[]
-  let mctx: MVarCtx := #[]
+  let kctx : KCtx := #[]
+  let mctx: MVCtx := #[]
   let term ← elabRType kctx mctx t
   return term
 

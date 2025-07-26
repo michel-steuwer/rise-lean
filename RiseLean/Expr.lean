@@ -1,17 +1,8 @@
+import RiseLean.Prelude
 import RiseLean.Type
 import Lean
 open Lean Elab Meta
 
-abbrev RTypingCtx := Array (Name × Option RType)
-
-inductive RExpr where
-  | bvar (deBruijnIndex : Nat) (userName : String)
-  | lit (val : Nat)
-  | app (fn arg : RExpr)
-
-  | lam (body : RExpr) (binderKind : Option RType)
-  | ulam (body : RExpr) (binderType : Option RKind)
-deriving Repr
 
 declare_syntax_cat rise_expr
 syntax num                                                  : rise_expr
@@ -23,8 +14,8 @@ syntax:50 rise_expr:50 rise_expr:51                         : rise_expr
 syntax:40 rise_expr:41 "|>" rise_expr:40                    : rise_expr
 syntax:60 "(" rise_expr ")"                                 : rise_expr
 
-partial def elabToRExpr (tctx : RTypingCtx) (kctx : RKindingCtx) (mctx : MVarCtx) : Syntax → TermElabM RExpr
-  | `(rise_expr| $l:num) => do
+partial def elabToRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM RExpr
+| `(rise_expr| $l:num) => do
     return RExpr.lit l.getNat
   | `(rise_expr| $i:ident) => do
     match tctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
@@ -81,7 +72,7 @@ instance : ToExpr RExpr where
     go
   toTypeExpr := mkConst ``RExpr
 
-def elabRExpr (tctx : RTypingCtx) (kctx : RKindingCtx) (mctx : MVarCtx) (stx : Syntax) : TermElabM Expr := do
+def elabRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (stx : Syntax) : TermElabM Expr := do
   let rexpr ← elabToRExpr tctx kctx mctx stx
   return toExpr rexpr
 
