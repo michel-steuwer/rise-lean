@@ -1,6 +1,7 @@
-import RiseLean.Type
-import RiseLean.Expr
-import RiseLean.Check
+-- import RiseLean.Type
+-- import RiseLean.Expr
+-- import RiseLean.Check
+import RiseLean.Program
 
 -- RISE
 --

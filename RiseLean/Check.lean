@@ -1,7 +1,6 @@
 import RiseLean.Prelude
 import RiseLean.Expr
 import RiseLean.Type
--- import RiseLean.Program
 import RiseLean.Unification
 
 set_option linter.unusedVariables false
@@ -40,10 +39,15 @@ partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
 
 def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except String RType := do
   match e with
-  -- | .lam a b => sorry
+  | .lam bt body =>
+    let newTctx := tctx.push ("todo".toName, bt)
+    let bodyt ← inferAux mctx kctx newTctx body
+    match bt with
+    | some bt => return .pi bt bodyt
+    | none => .error "todo: infer lam arg without annotation"
   | .bvar id un => match tctx.reverse[id]!.2 with
     | some t => return t
-    | none => .error "idk"
+    | none => .error "todo: infer bvar without annotation"
   | .lit _ => return RType.data .scalar
   -- | .prim p => match primitives.find? (λ (pn,t) => p == pn) with
     -- | some t => return t.2

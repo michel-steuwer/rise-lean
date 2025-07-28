@@ -26,16 +26,16 @@ partial def elabToRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → 
   | `(rise_expr| fun $x:ident => $b:rise_expr )
   | `(rise_expr| fun ($x:ident) => $b:rise_expr ) => do
     let b ← elabToRExpr (tctx.push (x.getId, none)) kctx mctx b
-    return RExpr.lam b none
+    return RExpr.lam none b
   | `(rise_expr| fun $x:ident : $t:rise_type => $b:rise_expr )
   | `(rise_expr| fun ( $x:ident : $t:rise_type ) => $b:rise_expr ) => do
     let b ← elabToRExpr (tctx.push (x.getId, none)) kctx mctx b
     let t ← elabToRType kctx mctx t
-    return RExpr.lam b (some t)
+    return RExpr.lam (some t) b
   | `(rise_expr| fun ( $x:ident : $k:rise_kind ) => $b:rise_expr ) => do
     let k ← elabToRKind k
     let b ← elabToRExpr tctx (kctx.push (x.getId, k)) mctx b
-    return RExpr.ulam b (some k)
+    return RExpr.ulam (some k) b
   | `(rise_expr| $e1:rise_expr $e2:rise_expr ) => do
       let e1 ← elabToRExpr tctx kctx mctx e1
       let e2 ← elabToRExpr tctx kctx mctx e2
@@ -55,18 +55,18 @@ instance : ToExpr RExpr where
         mkAppN (mkConst ``RExpr.lit) #[mkNatLit n]
     | RExpr.bvar index name =>
         mkAppN (mkConst ``RExpr.bvar) #[mkNatLit index, mkStrLit name]
-    | RExpr.lam body tyOpt =>
+    | RExpr.lam tyOpt body =>
         let bodyExpr := go body
         let tyOptExpr := match tyOpt with
           | none => mkApp (mkConst ``Option.none [levelZero]) (mkConst ``RType)
           | some ty => mkAppN (mkConst ``Option.some [levelZero]) #[mkConst ``RType, toExpr ty]
-        mkAppN (mkConst ``RExpr.lam) #[bodyExpr, tyOptExpr]
-    | RExpr.ulam body kindOpt =>
+        mkAppN (mkConst ``RExpr.lam) #[tyOptExpr, bodyExpr]
+    | RExpr.ulam kindOpt body =>
         let bodyExpr := go body
         let kindOptExpr := match kindOpt with
           | none => mkApp (mkConst ``Option.none [levelZero]) (mkConst ``RKind)
           | some kind => mkAppN (mkConst ``Option.some [levelZero]) #[mkConst ``RKind, toExpr kind]
-        mkAppN (mkConst ``RExpr.ulam) #[bodyExpr, kindOptExpr]
+        mkAppN (mkConst ``RExpr.ulam) #[kindOptExpr, bodyExpr]
     | RExpr.app e1 e2 =>
         mkAppN (mkConst ``RExpr.app) #[go e1, go e2]
     go

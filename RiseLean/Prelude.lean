@@ -9,6 +9,7 @@ inductive RKind
   | type
   -- | etc
 deriving BEq, Hashable, Repr
+
 -- Nat
 --   n ::= 0 | n + n | n · n | ... (Natural Number Literals, Binary Operations)
 inductive RNat
@@ -16,6 +17,7 @@ inductive RNat
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
 deriving Repr, BEq, DecidableEq
+
 -- DataType
 --   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 inductive RData
@@ -29,7 +31,6 @@ inductive RData
 deriving Repr, BEq
 
 -- Im-/ex-plicity of parameters
-
 inductive Plicity
   | ex
   | im
@@ -50,8 +51,8 @@ inductive RExpr where
   | lit (val : Nat)
   | app (fn arg : RExpr)
 
-  | lam (body : RExpr) (binderKind : Option RType)
-  | ulam (body : RExpr) (binderType : Option RKind)
+  | lam (binderType : Option RType) (body : RExpr) 
+  | ulam (binderKind : Option RKind) (body : RExpr) 
 deriving Repr
 
 abbrev MVCtx := Array (Name × RKind × Option RType)
