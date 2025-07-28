@@ -18,43 +18,50 @@ partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
     addImplicits newMctx newB
   | x => (mctx, x)
 
-def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except String RType := do
+-- TODO: with primitives in the context, their mvars are now shared by all invocations of the same primitive... this was not a problem before -.-
+
+def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (s : Substitution) (e: RExpr) : Except String (RType × Substitution) := do
   match e with
   | .lam bt body =>
     match bt with
     | .some t =>
       let newTctx := tctx.push ("todo".toName, bt)
-      let bodyt ← inferAux mctx kctx newTctx body
-      return .pi t bodyt
+      let (bodyt, s) ← inferAux mctx kctx newTctx s body
+      return (.pi t bodyt, s)
     | none =>
       let newMctx := mctx.push ("todo".toName, RKind.data, none)
       let t := RType.data (.mvar 0 "todo")
       let newTctx := tctx.push ("todo".toName, t)
-      let bodyt ← inferAux newMctx kctx newTctx body
-      -- dbg_trace bodyt
-      return .pi t bodyt
+      let (bodyt, s) ← inferAux newMctx kctx newTctx s body
+      dbg_trace (bodyt, s)
+      let t := t.apply s -- TODO: not enough
+      return (.pi t bodyt, s)
+
   | .ulam bk body =>
     match bk with
     | some bk =>
       let newMctx := mctx.push ("todo".toName, bk, none)
-      let bodyt ← inferAux newMctx kctx tctx body
-      return .upi bk .ex "todo" bodyt
+      let (bodyt, s) ← inferAux newMctx kctx tctx s body
+      return (.upi bk .ex "todo" bodyt, s)
     | none => .error "todo: infer ulam arg without annotation"
+
   | .bvar id _ => match tctx.reverse[id]!.2 with
-    | some t => return t
+    | some t => return (t, s)
     | none => .error "todo: infer bvar without annotation"
-  | .lit _ => return RType.data .scalar
+
+  | .lit _ => return (RType.data .scalar, s)
+
   | .app f e =>
-    let ft ← inferAux mctx kctx tctx f
+    let (ft, s) ← inferAux mctx kctx tctx s f
     let (newMctx, ft) := addImplicits mctx ft
-    let et ← inferAux newMctx kctx tctx e
+    let (et, s) ← inferAux newMctx kctx tctx s e
     let (newMctx, et) := addImplicits newMctx et
     match ft.liftmvars (et.getmvars.size) with
     | .pi blt brt =>
       match blt.unify et with
-      | some s =>
+      | some sub =>
         -- dbg_trace (blt, et, brt, s, brt.apply s)
-        return brt.apply s
+        return (brt.apply sub, sub)
       | none => .error s!"\n{repr e}\ncannot unify {blt} with {et}"
     | .upi bk .im un b =>
       Except.error s!"unexpected upi {ft}"
@@ -62,11 +69,11 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except Stri
   -- | _ => Except.error s!"todo: infer {repr e}"
 
 
-def infer (e : RExpr) : Except String RType :=
-  let mctx : MVCtx := #[]
-  let kctx : KCtx := #[]
-  let tctx : TCtx := #[]
-  inferAux mctx kctx tctx e
+-- def infer (e : RExpr) : Except String RType :=
+--   let mctx : MVCtx := #[]
+--   let kctx : KCtx := #[]
+--   let tctx : TCtx := #[]
+--   inferAux mctx kctx tctx e
 
 -- Q: do we have polymorphism or do we need a type annotation here?
 -- #eval infer [Rise| fun(a, a)] -- defaults to data

@@ -50,11 +50,11 @@ partial def elabRDeclAndRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (e: Syn
     | _ => throwUnsupportedSyntax
   | none => do
       let e <- elabToRExpr tctx kctx mctx e
-      let t := inferAux mctx kctx tctx e
-      return toExpr (RResult.mk e t)
-      -- match t with
-      -- | .error s => throwError s
-      -- | .ok t => return toExpr (RResult.mk e t)
+      let t := inferAux mctx kctx tctx [] e
+      -- return toExpr (RResult.mk e t)
+      match t with
+      | .error s => return toExpr (RResult.mk e <| .error s)
+      | .ok t => return toExpr (RResult.mk e <| .ok t.1)
 
 partial def elabRProgram (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM Expr
   | `(rise_program| $d:rise_decl $e:rise_expr ) => do
@@ -77,6 +77,7 @@ macro_rules
     def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
     def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
     def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
+    def transpose : {n m : nat} → {δ : data} → n . m . δ → m . n . δ
   )
 
 elab "[RiseC|" p:rise_expr "]" : term => do
@@ -139,3 +140,4 @@ fun as => fun bs =>
 
 #pp [RiseC| add 0 5]
 #pp [RiseC| reduce add 0]
+#pp [RiseC| map transpose]
