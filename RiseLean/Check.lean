@@ -3,31 +3,12 @@ import RiseLean.Expr
 import RiseLean.Type
 import RiseLean.Unification
 
-set_option linter.unusedVariables false
-
-
-
-
--- def addPrimitive (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (name : String) (t : RType) : (MVCtx × KCtx × TCtx) :=
---   let newT := t.liftmvars mctx.size -- might need to .liftbvars here for split.
---   let newMctx := newT
---     |>.getmvars
---     |>.map (λ (n,k) => (s!"{name}_{n}_{mctx.size}", k, none))
---     |> mctx.append
-
---   -- TODO this won't be enough info to find the correct primitive later...
---   -- maybe adding primitives to the context doesn't make sense.
---   -- they are not free variables after all, they are not bound anywhere. we just know their type, modulo metavariables. but where and how should we store instances of primitives?
---   -- specifically, how should we refer back to them?
---   let newTctx := tctx.push (name, newT)
-
---   -- kctx used for explicit type params (like n in split), ignored for now.
---   (newMctx,kctx,newTctx)
-
-def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Except String Bool :=
-  -- match t1, t2 with
-  -- | .pi bt1 b1, .pi bt2 b2 =>
-  return t1 == t2
+-- set_option linter.unusedVariables false
+-- 
+-- def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Except String Bool :=
+--   -- match t1, t2 with
+--   -- | .pi bt1 b1, .pi bt2 b2 =>
+--   return t1 == t2
 
 partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
   match t with
@@ -40,55 +21,45 @@ partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
 def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (e: RExpr) : Except String RType := do
   match e with
   | .lam bt body =>
-    let newTctx := tctx.push ("todo".toName, bt)
-    let bodyt ← inferAux mctx kctx newTctx body
     match bt with
-    | some bt => return .pi bt bodyt
-    | none => .error "todo: infer lam arg without annotation"
-  | .bvar id un => match tctx.reverse[id]!.2 with
+    | .some t =>
+      let newTctx := tctx.push ("todo".toName, bt)
+      let bodyt ← inferAux mctx kctx newTctx body
+      return .pi t bodyt
+    | none =>
+      let newMctx := mctx.push ("todo".toName, RKind.data, none)
+      let t := RType.data (.mvar 0 "todo")
+      let newTctx := tctx.push ("todo".toName, t)
+      let bodyt ← inferAux newMctx kctx newTctx body
+      -- dbg_trace bodyt
+      return .pi t bodyt
+  | .ulam bk body =>
+    match bk with
+    | some bk =>
+      let newMctx := mctx.push ("todo".toName, bk, none)
+      let bodyt ← inferAux newMctx kctx tctx body
+      return .upi bk .ex "todo" bodyt
+    | none => .error "todo: infer ulam arg without annotation"
+  | .bvar id _ => match tctx.reverse[id]!.2 with
     | some t => return t
     | none => .error "todo: infer bvar without annotation"
   | .lit _ => return RType.data .scalar
-  -- | .prim p => match primitives.find? (λ (pn,t) => p == pn) with
-    -- | some t => return t.2
-    -- | none => Except.error s!"unknown primitive {repr p}"
   | .app f e =>
     let ft ← inferAux mctx kctx tctx f
-    -- dbg_trace "--- ft"
-    -- dbg_trace ft
-    -- dbg_trace mctx
     let (newMctx, ft) := addImplicits mctx ft
-    -- dbg_trace ft
-    -- dbg_trace newMctx
-    -- dbg_trace "aaa"
     let et ← inferAux newMctx kctx tctx e
     let (newMctx, et) := addImplicits newMctx et
-    -- dbg_trace "--- et"
-    -- dbg_trace et
-    -- dbg_trace newMctx
-    -- dbg_trace "--- et"
     match ft.liftmvars (et.getmvars.size) with
     | .pi blt brt =>
-      -- let (blk, ek) := (blt.getRKind, et.getRKind) -- this might be the wrong approach and i should just check the types, not kinds (because k : data => k : type)
-      -- unless blk == ek do
-      --   Except.error s!"kind mismatch: {blt} : {blk} != {et} : {ek}"
-      -- dbg_trace "huhu"
-      -- dbg_trace blt
-      -- dbg_trace et
       match blt.unify et with
       | some s =>
-        -- dbg_trace newMctx
-        -- dbg_trace ft
-        -- dbg_trace (blt, et)
-        -- dbg_trace s
-        -- dbg_trace brt
-        -- dbg_trace brt.subst s
+        -- dbg_trace (blt, et, brt, s, brt.apply s)
         return brt.apply s
-      | none => .error s!"{repr ft}\n{repr e}\ncannot unify {blt} with {et}"
+      | none => .error s!"\n{repr e}\ncannot unify {blt} with {et}"
     | .upi bk .im un b =>
       Except.error s!"unexpected upi {ft}"
     | _ => Except.error s!"not a function type: {ft}"
-  | _ => Except.error s!"todo: infer {repr e}"
+  -- | _ => Except.error s!"todo: infer {repr e}"
 
 
 def infer (e : RExpr) : Except String RType :=

@@ -98,7 +98,7 @@ def RData.toString : RData → String
   | RData.bvar idx name => s!"{name}@{idx}"
   | RData.mvar id name => s!"?{name}_{id}"
   | RData.array n d => s!"{n}.{RData.toString d}"
-  | RData.pair d1 d2 => s!"{RData.toString d1} × {RData.toString d2}"
+  | RData.pair d1 d2 => s!"({RData.toString d1} × {RData.toString d2})"
   | RData.index n => s!"idx[{n}]"
   | RData.scalar => "scalar"
   | RData.vector n => s!"{n}<float>"

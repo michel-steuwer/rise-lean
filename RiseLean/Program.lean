@@ -86,27 +86,10 @@ elab "[RiseC|" p:rise_expr "]" : term => do
 
 -------------------------------------------------------------------------
 
--- def showi : _ := (IO.print toString ·)
+syntax "#pp " term : command
+macro_rules
+| `(#pp $e) => `(#eval IO.print <| toString $e)
 
-#check [Rise|
-  import core
-
-  fun as => fun bs =>
-       zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
-]
-
-#check [RiseC|
-  fun as => fun bs =>
-       zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
-]
-
-
-#check toString [RiseC|
-  fun(k : nat) => fun(a : k . float) => reduce add 0 a
-]
-#eval IO.print <| toString [RiseC|
-  fun(a : 3 . float) => reduce add 0 a
-]
 
 #check [Rise|
 def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
@@ -121,6 +104,38 @@ fun as => fun bs =>
      zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
 ]
 
+#check [Rise|
+  import core
 
-#check [RiseC| add(0)]
-#check [RiseC| reduce add(0)]
+  fun as => fun bs =>
+       zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
+]
+
+#check [RiseC|
+  fun as => fun bs =>
+       zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
+]
+
+#pp [RiseC|
+  fun(k : nat) => fun(a : k . float) => reduce add 0 a
+]
+
+#pp [RiseC|
+  fun(a : 3 . float) => reduce add 0 a
+]
+
+-- wrong: need to propagate unification results up
+#pp [RiseC|
+  fun a => reduce add 0 a
+]
+
+#pp [RiseC|
+  fun a => reduce add 0
+]
+
+#pp [RiseC|
+  map (fun ab : float × float => mult (fst ab) (snd ab))
+]
+
+#pp [RiseC| add 0 5]
+#pp [RiseC| reduce add 0]

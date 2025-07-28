@@ -9,6 +9,11 @@ inductive SubstEnum
   | data (rdata : RData)
   | nat (rnat : RNat)
 
+instance : ToString SubstEnum where
+  toString
+    | SubstEnum.data rdata => s!"data({rdata})"
+    | SubstEnum.nat rnat => s!"nat({rnat})"
+
 abbrev Substitution := List (MVarId × SubstEnum)
 
 def RNat.substNat (t : RNat) (x : MVarId) (s : RNat) : RNat :=
