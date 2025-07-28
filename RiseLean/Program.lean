@@ -10,6 +10,10 @@ structure RResult where
   expr : RExpr
   type : Except String RType
 
+
+instance : ToString RResult where
+  toString x := s!"expr:\n{repr x.expr}\n\ntype:\n{x.type}"
+
 instance [ToExpr α] : ToExpr (Except String α) where
   toExpr
   | .error s => mkApp3 (Expr.const ``Except.error [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr s)
@@ -82,6 +86,8 @@ elab "[RiseC|" p:rise_expr "]" : term => do
 
 -------------------------------------------------------------------------
 
+-- def showi : _ := (IO.print toString ·)
+
 #check [Rise|
   import core
 
@@ -95,10 +101,10 @@ elab "[RiseC|" p:rise_expr "]" : term => do
 ]
 
 
-#check [RiseC|
+#check toString [RiseC|
   fun(k : nat) => fun(a : k . float) => reduce add 0 a
 ]
-#check [RiseC|
+#eval IO.print <| toString [RiseC|
   fun(a : 3 . float) => reduce add 0 a
 ]
 

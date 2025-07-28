@@ -37,7 +37,7 @@ instance : ToExpr RKind where
 
 instance : ToString RNat where
   toString
-    | RNat.bvar idx name => s!"{name}@{idx}"
+    -- | RNat.bvar idx name => s!"{name}@{idx}"
     | RNat.mvar id name => s!"?{name}_{id}"
     | RNat.nat n => s!"{n}"
 
@@ -50,21 +50,21 @@ syntax "[RiseN|" rise_nat "]" : term
 partial def elabToRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM RNat
   | `(rise_nat| $n:num) => return RNat.nat n.getNat
   | `(rise_nat| $x:ident) =>
-    match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
-    | some idx =>
-      return RNat.bvar idx x.getId.toString
-    | none =>
+    -- match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+    -- | some idx =>
+    --   return RNat.bvar idx x.getId.toString
+    -- | none =>
       match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
       | some idx =>
         return RNat.mvar idx x.getId.toString
-      | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
+      | none => throwErrorAt x s!"rnat: unknown identifier {mkConst x.getId}"
   | _ => throwUnsupportedSyntax
 
 instance : ToExpr RNat where
   toExpr e := match e with
-  | RNat.bvar deBruijnIndex userName =>
-    let f := mkConst ``RNat.bvar
-    mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
+  -- | RNat.bvar deBruijnIndex userName =>
+  --   let f := mkConst ``RNat.bvar
+  -- mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
   | RNat.mvar id userName =>
     let f := mkConst ``RNat.mvar
     mkAppN f #[mkNatLit id, mkStrLit userName]
@@ -126,7 +126,7 @@ partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RData
       match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
       | some index =>
         return RData.mvar index x.getId.toString
-      | none => throwErrorAt x s!"unknown identifier {mkConst x.getId}"
+      | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
 
   | `(rise_data| $n:rise_nat . $d:rise_data) => do
     let n ← elabToRNat kctx mctx n
@@ -300,7 +300,7 @@ def RData.ismvar : RData → Bool
 
 def RNat.liftmvars (n : Nat) : RNat → RNat
   | .mvar id un => .mvar (id + n) un
-  | .bvar id un => .bvar id un
+  -- | .bvar id un => .bvar id un
   | .nat k      => .nat k
 
 def RData.liftmvars (n : Nat) : RData → RData
@@ -344,7 +344,7 @@ def RType.liftmvars (n : Nat) : RType → RType
 
 private def RNat.getmvarsAux : RNat → Array (Nat × String × RKind) → Array (Nat × String × RKind)
   | .mvar id un, acc => acc.push (id, un, .nat)
-  | .bvar _id _un, acc => acc
+  -- | .bvar _id _un, acc => acc
   | .nat _k, acc      => acc
 
 private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Array (Nat × String × RKind)

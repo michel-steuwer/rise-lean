@@ -13,7 +13,7 @@ deriving BEq, Hashable, Repr
 -- Nat
 --   n ::= 0 | n + n | n · n | ... (Natural Number Literals, Binary Operations)
 inductive RNat
-  | bvar (deBruijnIndex : Nat) (userName : String)
+  -- | bvar (deBruijnIndex : Nat) (userName : String)
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
 deriving Repr, BEq, DecidableEq
