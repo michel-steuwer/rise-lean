@@ -14,11 +14,12 @@ syntax:50 rise_expr:50 rise_expr:51                         : rise_expr
 syntax:40 rise_expr:41 "|>" rise_expr:40                    : rise_expr
 syntax:60 "(" rise_expr ")"                                 : rise_expr
 
-partial def elabToRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM RExpr
+partial def elabToRExpr : Syntax → RElabM RExpr
   | `(rise_expr| $l:num) => do
     return RExpr.lit l.getNat
 
   | `(rise_expr| $i:ident) => do
+    let tctx ← getTCtx
     match tctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
       | some index =>
         return RExpr.bvar index i.getId.toString
@@ -27,32 +28,32 @@ partial def elabToRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → 
 
   | `(rise_expr| fun $x:ident => $b:rise_expr )
   | `(rise_expr| fun ($x:ident) => $b:rise_expr ) => do
-    let b ← elabToRExpr (tctx.push (x.getId, none)) kctx mctx b
+    let b ← withNewTerm (x.getId, none) do elabToRExpr b
     return RExpr.lam none b
 
   | `(rise_expr| fun $x:ident : $t:rise_type => $b:rise_expr )
   | `(rise_expr| fun ( $x:ident : $t:rise_type ) => $b:rise_expr ) => do
-    let b ← elabToRExpr (tctx.push (x.getId, none)) kctx mctx b
-    let t ← elabToRType kctx mctx t
+    let b ← withNewTerm (x.getId, none) do elabToRExpr b
+    let t ← elabToRType t
     return RExpr.lam (some t) b
 
   | `(rise_expr| fun ( $x:ident : $k:rise_kind ) => $b:rise_expr ) => do
     let k ← elabToRKind k
-    let b ← elabToRExpr tctx kctx (mctx.push (x.getId, k, none)) b
+    let b ← withNewMVar (x.getId, k, none) do elabToRExpr b
     return RExpr.ulam (some k) b
 
   | `(rise_expr| $e1:rise_expr $e2:rise_expr ) => do
-      let e1 ← elabToRExpr tctx kctx mctx e1
-      let e2 ← elabToRExpr tctx kctx mctx e2
+      let e1 ← elabToRExpr e1
+      let e2 ← elabToRExpr e2
       return RExpr.app e1 e2
 
   | `(rise_expr| $e:rise_expr |> $f:rise_expr) => do
     let s ← `(rise_expr| $f $e)
-    elabToRExpr tctx kctx mctx s
+    elabToRExpr s
 
   | `(rise_expr| ( $e:rise_expr )) => do
     let s ← `(rise_expr| $e)
-    elabToRExpr tctx kctx mctx s
+    elabToRExpr s
 
   | _ => throwUnsupportedSyntax
 
@@ -80,13 +81,13 @@ instance : ToExpr RExpr where
     go
   toTypeExpr := mkConst ``RExpr
 
-def elabRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (stx : Syntax) : RElabM Expr := do
-  let rexpr ← elabToRExpr tctx kctx mctx stx
+def elabRExpr (stx : Syntax) : RElabM Expr := do
+  let rexpr ← elabToRExpr stx
   return toExpr rexpr
 
 elab "[RiseE|" e:rise_expr "]" : term => do
   let p ← liftMacroM <| expandMacros e
-  liftToTermElabM <| elabRExpr #[] #[] #[] p
+  liftToTermElabM <| elabRExpr p
 
 --set_option pp.explicit true
 #check [RiseE| fun as => as]

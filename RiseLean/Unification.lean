@@ -118,7 +118,7 @@ end
 -- TODO relate eqsat and unifi
 
 mutual
-partial def unifyOne (s t : RData) : Option Substitution :=
+partial def unifyOneRData (s t : RData) : Option Substitution :=
   match s, t with
   | .mvar x _, .mvar y _ =>
     if x == y then some [] else some [(x, .data t)]
@@ -133,12 +133,12 @@ partial def unifyOne (s t : RData) : Option Substitution :=
     if n1 == n2 then some [] else none
 
   | .array k1 d1, .array k2 d2 =>
-    match unifyRNat [(k1, k2)], unify [(d1, d2)] with
+    match unifyRNat [(k1, k2)], unifyRData [(d1, d2)] with
     | some s1, some s2 => s1 ++ s2
     | _, _ => none
 
   | .pair l1 r1, .pair l2 r2 =>
-    unify [(l1, l2), (r1, r2)]
+    unifyRData [(l1, l2), (r1, r2)]
 
   | .index k1, .index k2 =>
     unifyOneRNat k1 k2
@@ -150,12 +150,12 @@ partial def unifyOne (s t : RData) : Option Substitution :=
 
   | _, _ => none
 
-partial def unify (equations : List (RData × RData)) : Option Substitution :=
+partial def unifyRData (equations : List (RData × RData)) : Option Substitution :=
   match equations with
   | [] => some []
   | (x, y) :: t => do
-    let t2 <- unify t
-    let t1 <- unifyOne (x.apply t2) (y.apply t2)
+    let t2 <- unifyRData t
+    let t1 <- unifyOneRData (x.apply t2) (y.apply t2)
     t1 ++ t2
 end
 
@@ -167,7 +167,7 @@ mutual
 partial def unifyOneRType (s t : RType) : Option Substitution :=
   match s, t with
   | .data dt1, .data dt2 =>
-    unify [(dt1, dt2)]
+    unifyRData [(dt1, dt2)]
 
   | .upi bk1 pc1 un1 body1, .upi bk2 pc2 un2 body2 =>
     if bk1 == bk2 && pc1 == pc2 && un1 == un2 then
@@ -201,6 +201,7 @@ def RType.unify (l r : RType) : Option Substitution :=
 -- instance : ToString Substitution where
 --   toString := Substitution.toString
 
+def unify := RType.unify
 
 -- technically, the "_, _" case doesn't check for enough. we would want better checking here, but we trust the algorithm.
 private def unifies (l r : RType) : Bool :=
@@ -226,7 +227,6 @@ private def unifies (l r : RType) : Bool :=
 -/
 elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
   let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
-  let kctx : KCtx := #[]
   let mctx_list ← mvars.toList.mapM (fun var => do
     let name := var.getId
     -- let kind_expr ← `(RKind.data)
@@ -234,7 +234,7 @@ elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
     return (name, RKind.data, none)
   )
   let mctx := mctx_list.toArray
-  liftToTermElabM <| elabRType kctx mctx l
+  liftToTermElabMWith { defaultContext with mctx := mctx } defaultState <| elabRType l
 
 
 -- tests. note that both params to unify should have the same mvar context.
@@ -269,7 +269,13 @@ elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
 #assert (unifies [RTw a b   | a                     ] [RTw a b   | a → b                ]) == false
 #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → c                ]) == false
 #assert (unifies [RTw a b c | c → c                 ] [RTw a b c | a × b → a            ]) == false
+-- these mvars are of kind nat, but no one checked if they fit! these shouldn't succeed right now.
 #assert (unifies [RTw a     | idx[a]                ] [RTw a     | idx[5]               ]) == true
 #assert (unifies [RTw a b   | a . b                 ] [RTw a b   | 3 . float            ]) == true
 #assert (unifies [RTw a b   | a . a                 ] [RTw a b   | 3 . b                ]) == true
 #assert (unifies [RTw a b   | idx[a]                ] [RTw a b   | idx[b]               ]) == true
+
+
+
+
+#eval (unify [RTw a     | idx[a]                ] [RTw a     | idx[5]               ])

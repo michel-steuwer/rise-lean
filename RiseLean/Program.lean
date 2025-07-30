@@ -7,17 +7,17 @@ open Lean Elab Meta
 
 structure RResult where
   expr : RExpr
-  type : Except String RType
+  type : RType
 
 
 instance : ToString RResult where
   toString x := s!"expr:\n{repr x.expr}\n\ntype:\n{x.type}"
 
-instance [ToExpr α] : ToExpr (Except String α) where
-  toExpr
-  | .error s => mkApp3 (Expr.const ``Except.error [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr s)
-  | .ok a => mkApp3 (Expr.const ``Except.ok [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr a)
-  toTypeExpr := mkApp2 (Expr.const ``Except [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α)
+-- instance [ToExpr α] : ToExpr (Except String α) where
+--   toExpr
+--   | .error s => mkApp3 (Expr.const ``Except.error [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr s)
+--   | .ok a => mkApp3 (Expr.const ``Except.ok [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr a)
+--   toTypeExpr := mkApp2 (Expr.const ``Except [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α)
 
 instance : ToExpr RResult where
   toExpr r :=
@@ -35,36 +35,33 @@ syntax "import" "core"            : rise_decl
 declare_syntax_cat  rise_program
 syntax (rise_decl)? rise_expr : rise_program
 
-partial def elabRDeclAndRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (e: Syntax) : Option Syntax → RElabM Expr
+partial def elabRDeclAndRExpr (e: Syntax) : Option Syntax → RElabM Expr
   | some d_stx =>
     match d_stx with
     | `(rise_decl| def $x:ident : $t:rise_type $decl:rise_decl ) => do
-      let t ← elabToRType kctx mctx t
+      let t ← elabToRType t
       -- Lean.logInfo m!"found {x.getId} : {t}"
-      elabRDeclAndRExpr (tctx.push (x.getId, t)) kctx mctx e (some decl)
+      withNewTerm (x.getId, t) do elabRDeclAndRExpr e (some decl)
     | `(rise_decl| def $x:ident : $t:rise_type ) => do
-      let t ← elabToRType kctx mctx t
+      let t ← elabToRType t
       -- Lean.logInfo m!"found {x.getId} : {t}"
-      elabRDeclAndRExpr (tctx.push (x.getId, t)) kctx mctx e none
+      withNewTerm (x.getId, t) do elabRDeclAndRExpr e none
     | _ => throwUnsupportedSyntax
   | none => do
-      let e <- elabToRExpr tctx kctx mctx e
-      let t := inferAux mctx kctx tctx [] e
-      -- return toExpr (RResult.mk e t)
-      match t with
-      | .error s => return toExpr (RResult.mk e <| .error s)
-      | .ok t => return toExpr (RResult.mk e <| .ok t.1)
+      let e ← elabToRExpr e
+      let t ← inferAux [] e
+      return toExpr <| RResult.mk e t.1
 
-partial def elabRProgram (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM Expr
+partial def elabRProgram : Syntax → RElabM Expr
   | `(rise_program| $d:rise_decl $e:rise_expr ) => do
-    elabRDeclAndRExpr tctx kctx mctx e (some d)
+    elabRDeclAndRExpr e (some d)
   | `(rise_program| $e:rise_expr ) => do
-    elabRDeclAndRExpr tctx kctx mctx e none
+    elabRDeclAndRExpr e none
   | _ => throwUnsupportedSyntax
 
 elab "[Rise|" p:rise_program "]" : term => do
   let p ← liftMacroM <| expandMacros p
-  liftToTermElabM <| elabRProgram #[] #[] #[] p
+  liftToTermElabM <| elabRProgram p
 
 -- alt:
 set_option hygiene false in
@@ -84,7 +81,7 @@ macro_rules
 elab "[RiseC|" p:rise_expr "]" : term => do
   let p ← `(rise_program| import core $p:rise_expr)
   let p ← liftMacroM <| expandMacros p
-  liftToTermElabM <| elabRProgram #[] #[] #[] p
+  liftToTermElabM <| elabRProgram p
 
 -------------------------------------------------------------------------
 

@@ -47,13 +47,14 @@ syntax ident                  : rise_nat
 
 syntax "[RiseN|" rise_nat "]" : term
 
-partial def elabToRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM RNat
+partial def elabToRNat : Syntax → RElabM RNat
   | `(rise_nat| $n:num) => return RNat.nat n.getNat
-  | `(rise_nat| $x:ident) =>
+  | `(rise_nat| $x:ident) => do
     -- match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     -- | some idx =>
     --   return RNat.bvar idx x.getId.toString
     -- | none =>
+      let mctx ← getMVCtx
       match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
       | some idx =>
         return RNat.mvar idx x.getId.toString
@@ -73,9 +74,9 @@ instance : ToExpr RNat where
     mkAppN f #[mkNatLit n]
   toTypeExpr := mkConst ``RNat
 
-partial def elabRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM Expr
+partial def elabRNat : Syntax → RElabM Expr
   | stx => do
-    let n ← elabToRNat kctx mctx stx
+    let n ← elabToRNat stx
     return toExpr n
 
 
@@ -115,10 +116,12 @@ syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when usi
 syntax rise_nat "<" "float" ">"        : rise_data
 syntax "(" rise_data ")"                  : rise_data
 
-partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM RData
+partial def elabToRData : Syntax → RElabM RData
   | `(rise_data| float) => return RData.scalar
 
-  | `(rise_data| $x:ident) =>
+  | `(rise_data| $x:ident) => do
+    let kctx ← getKCtx
+    let mctx ← getMVCtx
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     | some index =>
       return RData.bvar index x.getId.toString
@@ -129,25 +132,25 @@ partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM RData
       | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
 
   | `(rise_data| $n:rise_nat . $d:rise_data) => do
-    let n ← elabToRNat kctx mctx n
-    let d ← elabToRData kctx mctx d
+    let n ← elabToRNat n
+    let d ← elabToRData d
     return RData.array n d
 
   | `(rise_data| $l:rise_data × $r:rise_data) => do
-    let l ← elabToRData kctx mctx l
-    let r ← elabToRData kctx mctx r
+    let l ← elabToRData l
+    let r ← elabToRData r
     return RData.pair l r
 
   | `(rise_data| idx [$n:rise_nat]) => do
-    let n <- elabToRNat kctx mctx n
+    let n <- elabToRNat n
     return RData.index n
 
   | `(rise_data| $n:rise_nat < float >) => do
-    let n <- elabToRNat kctx mctx n
+    let n <- elabToRNat n
     return RData.vector n
 
   | `(rise_data| ($d:rise_data)) =>
-    elabToRData kctx mctx d
+    elabToRData d
 
   | _ => throwUnsupportedSyntax
 
@@ -170,9 +173,9 @@ instance : ToExpr RData where
     go
   toTypeExpr := mkConst ``RData
 
-partial def elabRData (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM Expr
+partial def elabRData : Syntax → RElabM Expr
   | stx => do
-    let d ← elabToRData kctx mctx stx
+    let d ← elabToRData stx
     return toExpr d
 
 instance : ToString Plicity where
@@ -224,23 +227,23 @@ macro_rules
 
 
 
-partial def elabToRType (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM RType
+partial def elabToRType : Syntax → RElabM RType
   | `(rise_type| $d:rise_data) => do
-    let d ← elabToRData kctx mctx d
+    let d ← elabToRData d
     return RType.data d
   | `(rise_type| $l:rise_type → $r:rise_type) => do
-    let t ← elabToRType kctx mctx l
-    let body ← elabToRType kctx mctx r
+    let t ← elabToRType l
+    let body ← elabToRType r
     return RType.pi t body
   | `(rise_type| ($t:rise_type)) => do
-    elabToRType kctx mctx t
+    elabToRType t
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← elabToRType kctx (mctx.push (x.getId, k, none)) t
+    let body ← withNewMVar (x.getId, k, none) do elabToRType t
     return RType.upi k Plicity.im x.getId.toString body
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← elabToRType (kctx.push (x.getId, some k)) mctx t
+    let body ← withNewType (x.getId, some k) do elabToRType t
     return RType.upi k Plicity.ex x.getId.toString body
   | _ => throwUnsupportedSyntax
 
@@ -260,17 +263,15 @@ instance : ToExpr RType where
   toTypeExpr := mkConst ``RType
 
 
-partial def elabRType (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM Expr
+partial def elabRType : Syntax → RElabM Expr
   | stx => do
-    let t ← elabToRType kctx mctx stx
+    let t ← elabToRType stx
     return toExpr t
 
 elab "[RiseT|" t:rise_type "]" : term => do
   -- macros run before elab, but we still have to manually expand macros?
   let t ← liftMacroM <| expandMacros t
-  let kctx : KCtx := #[]
-  let mctx: MVCtx := #[]
-  let term ← liftToTermElabM <| elabRType kctx mctx t
+  let term ← liftToTermElabM <| elabRType t
   return term
 
 

@@ -20,19 +20,18 @@ partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
 
 -- TODO: with primitives in the context, their mvars are now shared by all invocations of the same primitive... this was not a problem before -.-
 
-def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (s : Substitution) (e: RExpr) : Except String (RType × Substitution) := do
+def inferAux (s : Substitution) (e: RExpr) : RElabM (RType × Substitution) := do
   match e with
   | .lam bt body =>
     match bt with
     | .some t =>
-      let newTctx := tctx.push ("todo".toName, bt)
-      let (bodyt, s) ← inferAux mctx kctx newTctx s body
+      let (bodyt, s) ← withNewTerm ("todo".toName, bt) do inferAux s body
       return (.pi t bodyt, s)
     | none =>
-      let newMctx := mctx.push ("todo".toName, RKind.data, none)
       let t := RType.data (.mvar 0 "todo")
-      let newTctx := tctx.push ("todo".toName, t)
-      let (bodyt, s) ← inferAux newMctx kctx newTctx s body
+      let (bodyt, s) ← withNewMVar ("todo".toName, RKind.data, none) do
+                       withNewTerm ("todo".toName, t) do
+                        inferAux s body
       dbg_trace (bodyt, s)
       let t := t.apply s -- TODO: not enough
       return (.pi t bodyt, s)
@@ -40,21 +39,23 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (s : Substitution) (e: R
   | .ulam bk body =>
     match bk with
     | some bk =>
-      let newMctx := mctx.push ("todo".toName, bk, none)
-      let (bodyt, s) ← inferAux newMctx kctx tctx s body
+      let (bodyt, s) ← withNewMVar ("todo".toName, bk, none) do inferAux s body
       return (.upi bk .ex "todo" bodyt, s)
-    | none => .error "todo: infer ulam arg without annotation"
+    | none => throwError "todo: infer ulam arg without annotation"
 
-  | .bvar id _ => match tctx.reverse[id]!.2 with
+  | .bvar id _ =>
+    let tctx ← getTCtx
+    match tctx.reverse[id]!.2 with
     | some t => return (t, s)
-    | none => .error "todo: infer bvar without annotation"
+    | none => throwError "todo: infer bvar without annotation"
 
   | .lit _ => return (RType.data .scalar, s)
 
   | .app f e =>
-    let (ft, s) ← inferAux mctx kctx tctx s f
+    let (ft, s) ← inferAux s f
+    let mctx ← getMVCtx
     let (newMctx, ft) := addImplicits mctx ft
-    let (et, s) ← inferAux newMctx kctx tctx s e
+    let (et, s) ← withNewMVCTx (λ _ => newMctx) do inferAux s e
     let (newMctx, et) := addImplicits newMctx et
     match ft.liftmvars (et.getmvars.size) with
     | .pi blt brt =>
@@ -62,10 +63,10 @@ def inferAux (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (s : Substitution) (e: R
       | some sub =>
         -- dbg_trace (blt, et, brt, s, brt.apply s)
         return (brt.apply sub, sub)
-      | none => .error s!"\n{repr e}\ncannot unify {blt} with {et}"
+      | none => throwError s!"\n{repr e}\ncannot unify {blt} with {et}"
     | .upi bk .im un b =>
-      Except.error s!"unexpected upi {ft}"
-    | _ => Except.error s!"not a function type: {ft}"
+      throwError s!"unexpected upi {ft}"
+    | _ => throwError s!"not a function type: {ft}"
   -- | _ => Except.error s!"todo: infer {repr e}"
 
 
