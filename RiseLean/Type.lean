@@ -31,8 +31,8 @@ instance : ToExpr RKind where
   | RKind.nat => mkConst ``RKind.nat
   | RKind.data => mkConst ``RKind.data
   | RKind.type => mkConst ``RKind.type
-  toTypeExpr := mkConst ``RKind 
-  
+  toTypeExpr := mkConst ``RKind
+
 
 
 instance : ToString RNat where
@@ -71,8 +71,8 @@ instance : ToExpr RNat where
   | RNat.nat n =>
     let f := mkConst ``RNat.nat
     mkAppN f #[mkNatLit n]
-  toTypeExpr := mkConst ``RNat 
-  
+  toTypeExpr := mkConst ``RNat
+
 partial def elabRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM Expr
   | stx => do
     let n ← elabToRNat kctx mctx stx
@@ -152,7 +152,7 @@ partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RData
   | _ => throwUnsupportedSyntax
 
 instance : ToExpr RData where
-  toExpr := 
+  toExpr :=
     let rec go : RData → Expr
     | RData.scalar => mkConst ``RData.scalar
     | RData.bvar deBruijnIndex userName =>
@@ -184,8 +184,8 @@ instance : ToExpr Plicity where
   toExpr e := match e with
   | Plicity.ex => mkConst ``Plicity.ex
   | Plicity.im => mkConst ``Plicity.im
-  toTypeExpr := mkConst ``Plicity 
-  
+  toTypeExpr := mkConst ``Plicity
+
 
 -- only for Check::infer! to be able to panic
 instance : Inhabited RType where
@@ -245,7 +245,7 @@ partial def elabToRType (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RType
   | _ => throwUnsupportedSyntax
 
 instance : ToExpr RType where
-  toExpr := 
+  toExpr :=
     let rec go : RType → Expr
     | RType.data d =>
       let f := mkConst ``RType.data
@@ -257,9 +257,9 @@ instance : ToExpr RType where
       let f := mkConst ``RType.pi
       mkAppN f #[go binderType, go body]
     go
-  toTypeExpr := mkConst ``RType 
+  toTypeExpr := mkConst ``RType
 
-  
+
 partial def elabRType (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM Expr
   | stx => do
     let t ← elabToRType kctx mctx stx

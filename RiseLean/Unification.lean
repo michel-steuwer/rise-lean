@@ -121,6 +121,8 @@ partial def unifyRNat (equations : List (RNat × RNat)) : Option Substitution :=
     headSubst ++ tailSubst
 end
 
+-- TODO think about corresponding structural rules
+-- TODO relate eqsat and unifi
 
 mutual
 partial def unifyOne (s t : RData) : Option Substitution :=
@@ -137,28 +139,21 @@ partial def unifyOne (s t : RData) : Option Substitution :=
   | .bvar n1 _, .bvar n2 _ =>
     if n1 == n2 then some [] else none
 
-  -- todo: rnat unification
   | .array k1 d1, .array k2 d2 =>
     match unifyRNat [(k1, k2)], unify [(d1, d2)] with
     | some s1, some s2 => s1 ++ s2
     | _, _ => none
-    -- if k1 == k2 then
-    --   unify [(d1, d2)]
-    -- else
-    --   none
 
   | .pair l1 r1, .pair l2 r2 =>
     unify [(l1, l2), (r1, r2)]
 
-  -- todo: rnat unification
   | .index k1, .index k2 =>
-    if k1 == k2 then some [] else none
+    unifyOneRNat k1 k2
 
   | .scalar, .scalar => some []
 
-  -- todo: rnat unification
   | .vector k1, .vector k2 =>
-    if k1 == k2 then some [] else none
+    unifyOneRNat k1 k2
 
   | _, _ => none
 
@@ -281,8 +276,7 @@ elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
 #assert (unifies [RTw a b   | a                     ] [RTw a b   | a → b                ]) == false
 #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → c                ]) == false
 #assert (unifies [RTw a b c | c → c                 ] [RTw a b c | a × b → a            ]) == false
--- TODO
--- #assert (unifies [RTw a     | idx[a]                ] [RTw a     | idx[5]               ]) == true
--- #assert (unifies [RTw a b   | a . b                 ] [RTw a b   | 3 . float            ]) == true
--- #assert (unifies [RTw a b   | a . a                 ] [RTw a b   | 3 . b                ]) == true
--- #assert (unifies [RTw a b   | idx[a]                ] [RTw a b   | idx[b]               ]) == true
+#assert (unifies [RTw a     | idx[a]                ] [RTw a     | idx[5]               ]) == true
+#assert (unifies [RTw a b   | a . b                 ] [RTw a b   | 3 . float            ]) == true
+#assert (unifies [RTw a b   | a . a                 ] [RTw a b   | 3 . b                ]) == true
+#assert (unifies [RTw a b   | idx[a]                ] [RTw a b   | idx[b]               ]) == true

@@ -18,10 +18,10 @@ instance [ToExpr α] : ToExpr (Except String α) where
   toExpr
   | .error s => mkApp3 (Expr.const ``Except.error [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr s)
   | .ok a => mkApp3 (Expr.const ``Except.ok [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α) (toExpr a)
-  toTypeExpr := mkApp2 (Expr.const ``Except [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α)  
+  toTypeExpr := mkApp2 (Expr.const ``Except [levelZero, levelZero]) (toTypeExpr String) (toTypeExpr α)
 
 instance : ToExpr RResult where
-  toExpr r := 
+  toExpr r :=
     let exprExpr := toExpr r.expr
     let typeExpr := toExpr r.type
     mkAppN (mkConst ``RResult.mk) #[exprExpr, typeExpr]
@@ -67,10 +67,12 @@ elab "[Rise|" p:rise_program "]" : term => do
   let p ← liftMacroM <| expandMacros p
   elabRProgram #[] #[] #[] p
 
+-- alt:
 set_option hygiene false in
 macro_rules
   | `(rise_decl| import core) => `(rise_decl|
     def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
+--    def $(mkIdent `map) : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
     def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
     def add : {δ : data} → δ → δ → δ
     def mult : {δ : data} → δ → δ → δ

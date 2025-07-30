@@ -1,6 +1,6 @@
 import Lean
 open Lean
--- 
+--
 -- Kind
 --   κ ::= nat | data (Natural Number Kind, Datatype Kind)
 inductive RKind
@@ -48,11 +48,13 @@ deriving Repr, BEq
 
 inductive RExpr where
   | bvar (deBruijnIndex : Nat) (userName : String)
+-- fvar
+-- mvar
   | lit (val : Nat)
   | app (fn arg : RExpr)
 
-  | lam (binderType : Option RType) (body : RExpr) 
-  | ulam (binderKind : Option RKind) (body : RExpr) 
+  | lam (binderType : Option RType) (body : RExpr)
+  | ulam (binderKind : Option RKind) (body : RExpr)
 deriving Repr
 
 abbrev MVCtx := Array (Name × RKind × Option RType)
