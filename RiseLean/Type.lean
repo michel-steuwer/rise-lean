@@ -21,7 +21,7 @@ macro_rules
   | `([RiseK| nat]) => `(RKind.nat)
   | `([RiseK| data]) => `(RKind.data)
 
-partial def elabToRKind : Syntax -> TermElabM RKind
+partial def elabToRKind : Syntax -> RElabM RKind
   | `(rise_kind| nat ) => return RKind.nat
   | `(rise_kind| data ) => return RKind.data
   | _ => throwUnsupportedSyntax
@@ -47,7 +47,7 @@ syntax ident                  : rise_nat
 
 syntax "[RiseN|" rise_nat "]" : term
 
-partial def elabToRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM RNat
+partial def elabToRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM RNat
   | `(rise_nat| $n:num) => return RNat.nat n.getNat
   | `(rise_nat| $x:ident) =>
     -- match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
@@ -73,7 +73,7 @@ instance : ToExpr RNat where
     mkAppN f #[mkNatLit n]
   toTypeExpr := mkConst ``RNat
 
-partial def elabRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM Expr
+partial def elabRNat (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM Expr
   | stx => do
     let n ← elabToRNat kctx mctx stx
     return toExpr n
@@ -115,7 +115,7 @@ syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when usi
 syntax rise_nat "<" "float" ">"        : rise_data
 syntax "(" rise_data ")"                  : rise_data
 
-partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RData
+partial def elabToRData (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM RData
   | `(rise_data| float) => return RData.scalar
 
   | `(rise_data| $x:ident) =>
@@ -170,7 +170,7 @@ instance : ToExpr RData where
     go
   toTypeExpr := mkConst ``RData
 
-partial def elabRData (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM Expr
+partial def elabRData (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM Expr
   | stx => do
     let d ← elabToRData kctx mctx stx
     return toExpr d
@@ -224,7 +224,7 @@ macro_rules
 
 
 
-partial def elabToRType (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM RType
+partial def elabToRType (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM RType
   | `(rise_type| $d:rise_data) => do
     let d ← elabToRData kctx mctx d
     return RType.data d
@@ -260,7 +260,7 @@ instance : ToExpr RType where
   toTypeExpr := mkConst ``RType
 
 
-partial def elabRType (kctx : KCtx) (mctx : MVCtx): Syntax → TermElabM Expr
+partial def elabRType (kctx : KCtx) (mctx : MVCtx): Syntax → RElabM Expr
   | stx => do
     let t ← elabToRType kctx mctx stx
     return toExpr t
@@ -270,7 +270,7 @@ elab "[RiseT|" t:rise_type "]" : term => do
   let t ← liftMacroM <| expandMacros t
   let kctx : KCtx := #[]
   let mctx: MVCtx := #[]
-  let term ← elabRType kctx mctx t
+  let term ← liftToTermElabM <| elabRType kctx mctx t
   return term
 
 

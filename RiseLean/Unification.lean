@@ -3,18 +3,11 @@ import RiseLean.Type
 import Assert
 import Lean
 
-abbrev MVarId := Nat
-
-inductive SubstEnum
-  | data (rdata : RData)
-  | nat (rnat : RNat)
 
 instance : ToString SubstEnum where
   toString
     | SubstEnum.data rdata => s!"data({rdata})"
     | SubstEnum.nat rnat => s!"nat({rnat})"
-
-abbrev Substitution := List (MVarId × SubstEnum)
 
 def RNat.substNat (t : RNat) (x : MVarId) (s : RNat) : RNat :=
     match t with
@@ -241,7 +234,7 @@ elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
     return (name, RKind.data, none)
   )
   let mctx := mctx_list.toArray
-  elabRType kctx mctx l
+  liftToTermElabM <| elabRType kctx mctx l
 
 
 -- tests. note that both params to unify should have the same mvar context.

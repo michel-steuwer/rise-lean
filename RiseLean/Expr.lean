@@ -14,7 +14,7 @@ syntax:50 rise_expr:50 rise_expr:51                         : rise_expr
 syntax:40 rise_expr:41 "|>" rise_expr:40                    : rise_expr
 syntax:60 "(" rise_expr ")"                                 : rise_expr
 
-partial def elabToRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM RExpr
+partial def elabToRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM RExpr
   | `(rise_expr| $l:num) => do
     return RExpr.lit l.getNat
 
@@ -80,13 +80,13 @@ instance : ToExpr RExpr where
     go
   toTypeExpr := mkConst ``RExpr
 
-def elabRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (stx : Syntax) : TermElabM Expr := do
+def elabRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (stx : Syntax) : RElabM Expr := do
   let rexpr ← elabToRExpr tctx kctx mctx stx
   return toExpr rexpr
 
 elab "[RiseE|" e:rise_expr "]" : term => do
   let p ← liftMacroM <| expandMacros e
-  elabRExpr #[] #[] #[] p
+  liftToTermElabM <| elabRExpr #[] #[] #[] p
 
 --set_option pp.explicit true
 #check [RiseE| fun as => as]

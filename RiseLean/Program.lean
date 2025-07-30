@@ -1,5 +1,4 @@
 import RiseLean.Type
-
 import RiseLean.Expr
 import RiseLean.Check
 import Lean
@@ -36,7 +35,7 @@ syntax "import" "core"            : rise_decl
 declare_syntax_cat  rise_program
 syntax (rise_decl)? rise_expr : rise_program
 
-partial def elabRDeclAndRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (e: Syntax) : Option Syntax → TermElabM Expr
+partial def elabRDeclAndRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (e: Syntax) : Option Syntax → RElabM Expr
   | some d_stx =>
     match d_stx with
     | `(rise_decl| def $x:ident : $t:rise_type $decl:rise_decl ) => do
@@ -56,7 +55,7 @@ partial def elabRDeclAndRExpr (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) (e: Syn
       | .error s => return toExpr (RResult.mk e <| .error s)
       | .ok t => return toExpr (RResult.mk e <| .ok t.1)
 
-partial def elabRProgram (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → TermElabM Expr
+partial def elabRProgram (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax → RElabM Expr
   | `(rise_program| $d:rise_decl $e:rise_expr ) => do
     elabRDeclAndRExpr tctx kctx mctx e (some d)
   | `(rise_program| $e:rise_expr ) => do
@@ -65,7 +64,7 @@ partial def elabRProgram (tctx : TCtx) (kctx : KCtx) (mctx : MVCtx) : Syntax →
 
 elab "[Rise|" p:rise_program "]" : term => do
   let p ← liftMacroM <| expandMacros p
-  elabRProgram #[] #[] #[] p
+  liftToTermElabM <| elabRProgram #[] #[] #[] p
 
 -- alt:
 set_option hygiene false in
@@ -85,7 +84,7 @@ macro_rules
 elab "[RiseC|" p:rise_expr "]" : term => do
   let p ← `(rise_program| import core $p:rise_expr)
   let p ← liftMacroM <| expandMacros p
-  elabRProgram #[] #[] #[] p
+  liftToTermElabM <| elabRProgram #[] #[] #[] p
 
 -------------------------------------------------------------------------
 
