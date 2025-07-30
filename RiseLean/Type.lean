@@ -37,7 +37,7 @@ instance : ToExpr RKind where
 
 instance : ToString RNat where
   toString
-    -- | RNat.bvar idx name => s!"{name}@{idx}"
+    | RNat.bvar idx name => s!"{name}@{idx}"
     | RNat.mvar id name => s!"?{name}_{id}"
     | RNat.nat n => s!"{n}"
 
@@ -50,10 +50,11 @@ syntax "[RiseN|" rise_nat "]" : term
 partial def elabToRNat : Syntax → RElabM RNat
   | `(rise_nat| $n:num) => return RNat.nat n.getNat
   | `(rise_nat| $x:ident) => do
-    -- match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
-    -- | some idx =>
-    --   return RNat.bvar idx x.getId.toString
-    -- | none =>
+    let kctx ← getKCtx
+    match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
+    | some idx =>
+      return RNat.bvar idx x.getId.toString
+    | none =>
       let mctx ← getMVCtx
       match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
       | some idx =>
@@ -63,9 +64,9 @@ partial def elabToRNat : Syntax → RElabM RNat
 
 instance : ToExpr RNat where
   toExpr e := match e with
-  -- | RNat.bvar deBruijnIndex userName =>
-  --   let f := mkConst ``RNat.bvar
-  -- mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
+  | RNat.bvar deBruijnIndex userName =>
+    let f := mkConst ``RNat.bvar
+    mkAppN f #[mkNatLit deBruijnIndex, mkStrLit userName]
   | RNat.mvar id userName =>
     let f := mkConst ``RNat.mvar
     mkAppN f #[mkNatLit id, mkStrLit userName]
@@ -239,7 +240,7 @@ partial def elabToRType : Syntax → RElabM RType
     elabToRType t
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
     let k ← elabToRKind k
-    let body ← withNewMVar (x.getId, k, none) do elabToRType t
+    let body ← withNewType (x.getId, k) do elabToRType t
     return RType.upi k Plicity.im x.getId.toString body
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← elabToRKind k
@@ -290,7 +291,7 @@ def unexpandRiseDataArray : Unexpander
 #guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] ==
   RType.upi RKind.data Plicity.im "δ1"
         (RType.upi RKind.data Plicity.im "δ2"
-          ((RType.data ((RData.mvar 1 "δ1").pair (RData.mvar 0 "δ2"))).pi (RType.data (RData.mvar 1 "δ1"))))
+          ((RType.data ((RData.bvar 1 "δ1").pair (RData.bvar 0 "δ2"))).pi (RType.data (RData.bvar 1 "δ1"))))
 
 
 #check [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2]
@@ -301,7 +302,7 @@ def RData.ismvar : RData → Bool
 
 def RNat.liftmvars (n : Nat) : RNat → RNat
   | .mvar id un => .mvar (id + n) un
-  -- | .bvar id un => .bvar id un
+  | .bvar id un => .bvar id un
   | .nat k      => .nat k
 
 def RData.liftmvars (n : Nat) : RData → RData
@@ -345,7 +346,7 @@ def RType.liftmvars (n : Nat) : RType → RType
 
 private def RNat.getmvarsAux : RNat → Array (Nat × String × RKind) → Array (Nat × String × RKind)
   | .mvar id un, acc => acc.push (id, un, .nat)
-  -- | .bvar _id _un, acc => acc
+  | .bvar _id _un, acc => acc
   | .nat _k, acc      => acc
 
 private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Array (Nat × String × RKind)

@@ -61,8 +61,8 @@ def inferAux (s : Substitution) (e: RExpr) : RElabM (RType × Substitution) := d
     | .pi blt brt =>
       match blt.unify et with
       | some sub =>
-        -- dbg_trace (blt, et, brt, s, brt.apply s)
-        return (brt.apply sub, sub)
+        dbg_trace (brt, sub ++ s)
+        return (brt.apply sub, sub ++ s)
       | none => throwError s!"\n{repr e}\ncannot unify {blt} with {et}"
     | .upi bk .im un b =>
       throwError s!"unexpected upi {ft}"

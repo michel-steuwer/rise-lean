@@ -13,7 +13,7 @@ deriving BEq, Hashable, Repr
 -- Nat
 --   n ::= 0 | n + n | n · n | ... (Natural Number Literals, Binary Operations)
 inductive RNat
-  -- | bvar (deBruijnIndex : Nat) (userName : String)
+  | bvar (deBruijnIndex : Nat) (userName : String)
   | mvar (id : Nat) (userName : String)
   | nat: Nat → RNat
 deriving Repr, BEq, DecidableEq
@@ -58,13 +58,13 @@ inductive RExpr where
 deriving Repr
 
 abbrev MVCtxElem := Lean.Name × RKind × Option RType
-abbrev MVCtx := Array MVCtxElem 
+abbrev MVCtx := Array MVCtxElem
 
 abbrev KCtxElem := Lean.Name × Option RKind
-abbrev KCtx := Array KCtxElem 
+abbrev KCtx := Array KCtxElem
 
 abbrev TCtxElem := Lean.Name × Option RType
-abbrev TCtx := Array TCtxElem 
+abbrev TCtx := Array TCtxElem
 
 
 abbrev MVarId := Nat
@@ -74,6 +74,7 @@ inductive SubstEnum
   | nat (rnat : RNat)
 
 abbrev Substitution := List (MVarId × SubstEnum)
+
 
 structure RContext where
   tctx : TCtx
