@@ -21,7 +21,7 @@ partial def addImplicits (t: RType) : RElabM RType := do
   | x => return x
 
 partial def inferAux (e: RExpr) : RElabM RType := do
-  dbg_trace (repr e)
+  -- dbg_trace (repr e)
   match e with
   | .const un => match (← findConst? un) with
     | some t => return t
@@ -34,7 +34,15 @@ partial def inferAux (e: RExpr) : RElabM RType := do
       let bodyt ← withNewLocalTerm (un, bt) do inferAux body
       return .pi t bodyt
     | none =>
-      throwError "todo lam"
+      let body := body.bvar2fvar un -- why does this call cause "fail to show termination?"
+      let id ← getFreshMVarId
+      addMVar id Lean.Name.anonymous RKind.data  
+      let t :=  RType.data (.mvar id Lean.Name.anonymous)
+      let bodyt ← withNewLocalTerm (un, t) do inferAux body
+      let t ← applyUnifyResults t
+      let bodyt ← applyUnifyResults bodyt
+      return .pi t bodyt
+            -- throwError "todo lam"
     --   let t := RType.data (.mvar 0 "todo")
     --   let (bodyt, s) ← withNewTVar ("todo".toName, some RKind.data) do
     --                    withNewTerm ("todo".toName, t) do
@@ -77,9 +85,9 @@ partial def inferAux (e: RExpr) : RElabM RType := do
       | some sub =>
         addSubst sub
         return brt.apply sub
+        -- applyUnifyResults brt
       | none =>
-        -- dbg_trace brt
-        throwError s!"\n{repr e}\ncannot unify {blt} with {et}"
+        throwError s!"\n{repr f}\n\n{repr e}\n\ncannot unify {blt} with {et}"
     | .upi bk .im un b =>
       throwError s!"unexpected upi {ft}"
     | _ => throwError s!"not a function type: {ft}"

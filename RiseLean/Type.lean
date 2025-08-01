@@ -445,3 +445,7 @@ def RType.bvar2mvar (t : RType) (mid : RMVarId) : RType :=
   | .upi bk pc un b, n, m => .upi bk pc un (go b (n+1) m)
   | .pi bt b, n, m => .pi (go bt n m) (go b n m)
 
+instance : ToString SubstEnum where
+  toString
+    | SubstEnum.data rdata => s!"data({rdata})"
+    | SubstEnum.nat rnat => s!"nat({rnat})"
