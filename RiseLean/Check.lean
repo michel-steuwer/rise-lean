@@ -15,17 +15,23 @@ partial def addImplicits (t: RType) : RElabM RType := do
   match t with
   | .upi bk .im un b => do
     let mid ← getFreshMVarId
-    addMVar mid un.toName bk none
+    addMVar mid un bk none
     let newB := b.bvar2mvar mid
     addImplicits newB
   | x => return x
 
-def inferAux (s : Substitution) (e: RExpr) : RElabM RType := do
+partial def inferAux (e: RExpr) : RElabM RType := do
+  dbg_trace (repr e)
   match e with
-  | .lam bt body =>
+  | .const un => match (← findConst? un) with
+    | some t => return t
+    | none => throwError "unknown identifier {un}"
+    
+  | .lam un bt body =>
     match bt with
     | .some t =>
-      let bodyt ← withNewTerm ("todo".toName, bt) do inferAux s body
+      let body := body.bvar2fvar un -- why does this call cause "fail to show termination?"
+      let bodyt ← withNewLocalTerm (un, bt) do inferAux body
       return .pi t bodyt
     | none =>
       throwError "todo lam"
@@ -37,7 +43,7 @@ def inferAux (s : Substitution) (e: RExpr) : RElabM RType := do
     --   let t := t.apply s -- TODO: not enough
     --   return (.pi t bodyt, s)
 
-  | .ulam bk body =>
+  | .ulam un bk body =>
     throwError "todo ulam"
     -- match bk with
     -- | some bk =>
@@ -45,19 +51,25 @@ def inferAux (s : Substitution) (e: RExpr) : RElabM RType := do
     --   return (.upi bk .ex "todo" bodyt, s)
     -- | none => throwError "todo: infer ulam arg without annotation"
 
-  | .bvar id _ =>
-    throwError "unexpected bvar {id}"
+  | .fvar id =>
+    match (← findLocal? id) with
+    | some t => return t
+    | none => throwError "todo: infer fvar without annotation"
+    -- throwError "unexpected fvar {id}"
+
     -- let tctx ← getTCtx
     -- match tctx.reverse[id]!.2 with
     -- | some t => return t
     -- | none => throwError "todo: infer bvar without annotation"
+  | .bvar id =>
+    throwError "unexpected bvar {id}"
 
   | .lit _ => return RType.data .scalar
 
   | .app f e =>
-    let ft ← inferAux s f
+    let ft ← inferAux f
     let ft ← addImplicits ft
-    let et ← inferAux s e
+    let et ← inferAux e
     let et ← addImplicits et
     match ft with
     | .pi blt brt =>

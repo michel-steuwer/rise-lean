@@ -21,8 +21,8 @@ deriving Repr, BEq, DecidableEq
 -- DataType
 --   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 inductive RData
-  | bvar (deBruijnIndex : Nat) (userName : String)
-  | mvar (id : Nat) (userName : String)
+  | bvar (deBruijnIndex : Nat) (userName : Lean.Name)
+  | mvar (id : Nat) (userName : Lean.Name)
   | array  : RNat → RData → RData
   | pair   : RData → RData → RData
   | index  : RNat → RData
@@ -41,20 +41,21 @@ deriving Repr, BEq
 inductive RType where
   | data (dt : RData)
   -- do we need this distinction? yes, but we could do these cases with universe level. would need a RType.sort variant though
-  | upi (binderKind : RKind) (pc : Plicity) (userName : String) (body : RType)
+  | upi (binderKind : RKind) (pc : Plicity) (userName : Lean.Name) (body : RType)
   | pi (binderType : RType) (body : RType)
 deriving Repr, BEq
 
 
 inductive RExpr where
-  | bvar (deBruijnIndex : Nat) (userName : String)
--- fvar
+  | bvar (deBruijnIndex : Nat)
+  | fvar (userName : Lean.Name) -- this is a problem when multiple idents have the same name?
 -- mvar
+  | const (userName : Lean.Name)
   | lit (val : Nat)
   | app (fn arg : RExpr)
 
-  | lam (binderType : Option RType) (body : RExpr)
-  | ulam (binderKind : Option RKind) (body : RExpr)
+  | lam (binderName : Lean.Name) (binderType : Option RType) (body : RExpr)
+  | ulam (binderName : Lean.Name) (binderKind : Option RKind) (body : RExpr)
 deriving Repr
 
 -- abbrev MVCtxElem := Lean.Name × RKind × Option RType
@@ -87,7 +88,8 @@ abbrev Substitution := List (RMVarId × SubstEnum)
 
 
 structure RContext where
-  tctx : TCtx := #[]
+  gtctx : TCtx := #[]
+  ltctx : TCtx := #[]
   kctx : KCtx := #[]
   -- mctx : MVCtx
   -- debug : Bool := false
@@ -129,8 +131,24 @@ def addSubst (s : Substitution) : RElabM Unit := do
   modify (λ r => {r with unifyResult := s ++ r.unifyResult})
 
 
-def withNewTerm (arg : TCtxElem) : RElabM α → RElabM α :=
-  withReader (fun ctx => { ctx with tctx := ctx.tctx.push arg })
+def withNewLocalTerm (arg : TCtxElem) : RElabM α → RElabM α :=
+  withReader (fun ctx => { ctx with ltctx := ctx.ltctx.push arg })
+
+def withNewGlobalTerm (arg : TCtxElem) : RElabM α → RElabM α :=
+  withReader (fun ctx => { ctx with gtctx := ctx.gtctx.push arg })
+
+def findConst? (n : Lean.Name) : RElabM <| Option RType := do
+  let gtctx := (← read).gtctx
+  return match gtctx.find? (λ (name, _) => name == n) with
+  | some (_, rtype) => rtype
+  | none => none
+
+def findLocal? (n : Lean.Name) : RElabM <| Option RType := do
+  let ltctx := (← read).ltctx
+  return match ltctx.find? (λ (name, _) => name == n) with
+  | some (_, rtype) => rtype
+  | none => none
+
 
 def withNewTVar (arg : KCtxElem) : RElabM α → RElabM α :=
   withReader (fun ctx => { ctx with kctx := ctx.kctx.push arg })
@@ -141,8 +159,11 @@ def withNewTVar (arg : KCtxElem) : RElabM α → RElabM α :=
 def withNewType (arg : KCtxElem) : RElabM α → RElabM α :=
   withReader (fun ctx => { ctx with kctx := ctx.kctx.push arg })
 
-def getTCtx : RElabM TCtx := do
-  return (← read).tctx
+def getLTCtx : RElabM TCtx := do
+  return (← read).ltctx
+
+def getGTCtx : RElabM TCtx := do
+  return (← read).gtctx
 
 def getKCtx : RElabM KCtx := do
   return (← read).kctx

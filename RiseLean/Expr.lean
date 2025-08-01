@@ -19,28 +19,32 @@ partial def elabToRExpr : Syntax → RElabM RExpr
     return RExpr.lit l.getNat
 
   | `(rise_expr| $i:ident) => do
-    let tctx ← getTCtx
-    match tctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
+    let ltctx ← getLTCtx
+    let gtctx ← getGTCtx
+    match ltctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
       | some index =>
-        return RExpr.bvar index i.getId.toString
+        return RExpr.bvar index
       -- could give a hint here if we find the identifier in the kinding context.
-      | none => throwErrorAt i s!"unknown identifier {i.getId}"
+      | none => match gtctx.reverse.findIdx? (λ (name, _) => name == i.getId) with
+        | some index =>
+          return RExpr.const i.getId
+        | none => throwErrorAt i s!"unknown identifier {i.getId}"
 
   | `(rise_expr| fun $x:ident => $b:rise_expr )
   | `(rise_expr| fun ($x:ident) => $b:rise_expr ) => do
-    let b ← withNewTerm (x.getId, none) do elabToRExpr b
-    return RExpr.lam none b
+    let b ← withNewLocalTerm (x.getId, none) do elabToRExpr b
+    return RExpr.lam x.getId none b
 
   | `(rise_expr| fun $x:ident : $t:rise_type => $b:rise_expr )
   | `(rise_expr| fun ( $x:ident : $t:rise_type ) => $b:rise_expr ) => do
-    let b ← withNewTerm (x.getId, none) do elabToRExpr b
+    let b ← withNewLocalTerm (x.getId, none) do elabToRExpr b
     let t ← elabToRType t
-    return RExpr.lam (some t) b
+    return RExpr.lam x.getId (some t) b
 
   | `(rise_expr| fun ( $x:ident : $k:rise_kind ) => $b:rise_expr ) => do
     let k ← elabToRKind k
     let b ← withNewTVar (x.getId, some k) do elabToRExpr b
-    return RExpr.ulam (some k) b
+    return RExpr.ulam x.getId (some k) b
 
   | `(rise_expr| $e1:rise_expr $e2:rise_expr ) => do
       let e1 ← elabToRExpr e1
@@ -62,20 +66,24 @@ instance : ToExpr RExpr where
     let rec go : RExpr → Expr
     | RExpr.lit n =>
         mkAppN (mkConst ``RExpr.lit) #[mkNatLit n]
-    | RExpr.bvar index name =>
-        mkAppN (mkConst ``RExpr.bvar) #[mkNatLit index, mkStrLit name]
-    | RExpr.lam tyOpt body =>
+    | RExpr.bvar index =>
+        mkAppN (mkConst ``RExpr.bvar) #[mkNatLit index]
+    | RExpr.fvar name =>
+        mkAppN (mkConst ``RExpr.fvar) #[toExpr name]
+    | RExpr.const name =>
+        mkAppN (mkConst ``RExpr.const) #[toExpr name]
+    | RExpr.lam name tyOpt body =>
         let bodyExpr := go body
         let tyOptExpr := match tyOpt with
           | none => mkApp (mkConst ``Option.none [levelZero]) (mkConst ``RType)
           | some ty => mkAppN (mkConst ``Option.some [levelZero]) #[mkConst ``RType, toExpr ty]
-        mkAppN (mkConst ``RExpr.lam) #[tyOptExpr, bodyExpr]
-    | RExpr.ulam kindOpt body =>
+        mkAppN (mkConst ``RExpr.lam) #[toExpr name, tyOptExpr, bodyExpr]
+    | RExpr.ulam name kindOpt body =>
         let bodyExpr := go body
         let kindOptExpr := match kindOpt with
           | none => mkApp (mkConst ``Option.none [levelZero]) (mkConst ``RKind)
           | some kind => mkAppN (mkConst ``Option.some [levelZero]) #[mkConst ``RKind, toExpr kind]
-        mkAppN (mkConst ``RExpr.ulam) #[kindOptExpr, bodyExpr]
+        mkAppN (mkConst ``RExpr.ulam) #[toExpr name, kindOptExpr, bodyExpr]
     | RExpr.app e1 e2 =>
         mkAppN (mkConst ``RExpr.app) #[go e1, go e2]
     go
@@ -111,4 +119,15 @@ elab "[RiseE|" e:rise_expr "]" : term => do
 #check [RiseE| fun(n : nat) => fun(x : n . float) => x]
 
 
--- def RExpr.bvar2fvar (e : RExpr) ()
+def RExpr.bvar2fvar (e : RExpr) (un : Lean.Name) : RExpr :=
+  go un e 0 where
+  go (un : Lean.Name) (e : RExpr) (n : Nat) : RExpr :=
+  match e with
+  | .bvar i => if i == n then .fvar un else e
+  | .fvar .. => e
+  | .const .. => e
+  | .lit .. => e
+  | .app fn arg => .app (go un fn n) (go un arg n)
+  | .lam lun bt b => .lam lun bt (go un b (n+1))
+  | .ulam lun bt b => .ulam lun bt (go un b (n+1))
+

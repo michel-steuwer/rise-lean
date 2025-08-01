@@ -126,7 +126,7 @@ partial def elabToRData : Syntax → RElabM RData
     -- let mctx ← getMVCtx
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     | some index =>
-      return RData.bvar index x.getId.toString
+      return RData.bvar index x.getId
     | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
 
     -- | none =>
@@ -163,9 +163,9 @@ instance : ToExpr RData where
     let rec go : RData → Expr
     | RData.scalar => mkConst ``RData.scalar
     | RData.bvar deBruijnIndex userName =>
-      mkAppN (mkConst ``RData.bvar) #[mkNatLit deBruijnIndex, mkStrLit userName]
+      mkAppN (mkConst ``RData.bvar) #[mkNatLit deBruijnIndex, toExpr userName]
     | RData.mvar id userName =>
-      mkAppN (mkConst ``RData.mvar) #[mkNatLit id, mkStrLit userName]
+      mkAppN (mkConst ``RData.mvar) #[mkNatLit id, toExpr userName]
     | RData.array n d =>
       mkAppN (mkConst ``RData.array) #[toExpr n, go d]
     | RData.pair l r =>
@@ -244,11 +244,11 @@ partial def elabToRType : Syntax → RElabM RType
   | `(rise_type| {$x:ident : $k:rise_kind} → $t:rise_type) => do
     let k ← elabToRKind k
     let body ← withNewType (x.getId, k) do elabToRType t
-    return RType.upi k Plicity.im x.getId.toString body
+    return RType.upi k Plicity.im x.getId body
   | `(rise_type| ($x:ident : $k:rise_kind) → $t:rise_type) => do
     let k ← elabToRKind k
     let body ← withNewType (x.getId, some k) do elabToRType t
-    return RType.upi k Plicity.ex x.getId.toString body
+    return RType.upi k Plicity.ex x.getId body
   | _ => throwUnsupportedSyntax
 
 instance : ToExpr RType where
@@ -259,7 +259,7 @@ instance : ToExpr RType where
       mkAppN f #[toExpr d]
     | RType.upi binderKind pc userName body =>
       let f := mkConst ``RType.upi
-      mkAppN f #[toExpr binderKind, toExpr pc, mkStrLit userName, go body]
+      mkAppN f #[toExpr binderKind, toExpr pc, toExpr userName, go body]
     | RType.pi binderType body =>
       let f := mkConst ``RType.pi
       mkAppN f #[go binderType, go body]
@@ -292,9 +292,9 @@ def unexpandRiseDataArray : Unexpander
 #check [RiseT| {δ : data} → δ → δ → δ]
 #check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1]
 #guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] ==
-  RType.upi RKind.data Plicity.im "δ1"
-        (RType.upi RKind.data Plicity.im "δ2"
-          ((RType.data ((RData.bvar 1 "δ1").pair (RData.bvar 0 "δ2"))).pi (RType.data (RData.bvar 1 "δ1"))))
+  RType.upi RKind.data Plicity.im `δ1
+        (RType.upi RKind.data Plicity.im `δ2
+          ((RType.data ((RData.bvar 1 `δ1).pair (RData.bvar 0 `δ2))).pi (RType.data (RData.bvar 1 `δ1))))
 
 
 #check [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2]
@@ -347,37 +347,37 @@ def RType.liftmvars (n : Nat) : RType → RType
 #reduce [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].liftmvars 5
 
 
-private def RNat.getmvarsAux : RNat → Array (Nat × String × RKind) → Array (Nat × String × RKind)
-  | .mvar id un, acc => acc.push (id, un, .nat)
-  | .bvar _id _un, acc => acc
-  | .nat _k, acc      => acc
+-- private def RNat.getmvarsAux : RNat → Array (Nat × String × RKind) → Array (Nat × String × RKind)
+--   | .mvar id un, acc => acc.push (id, un, .nat)
+--   | .bvar _id _un, acc => acc
+--   | .nat _k, acc      => acc
 
-private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Array (Nat × String × RKind)
-  | .bvar _n _un, acc  => acc
-  | .mvar id un, acc => acc.push (id, un, .data)
-  | .array k d, acc  => d.getmvarsAux (k.getmvarsAux acc)
-  | .pair l r, acc   => r.getmvarsAux (l.getmvarsAux acc)
-  | .index k, acc    => k.getmvarsAux acc
-  | .scalar, acc     => acc
-  | .vector k, acc   => k.getmvarsAux acc
+-- private def RData.getmvarsAux : RData → Array (Nat × String × RKind) → Array (Nat × String × RKind)
+--   | .bvar _n _un, acc  => acc
+--   | .mvar id un, acc => acc.push (id, un, .data)
+--   | .array k d, acc  => d.getmvarsAux (k.getmvarsAux acc)
+--   | .pair l r, acc   => r.getmvarsAux (l.getmvarsAux acc)
+--   | .index k, acc    => k.getmvarsAux acc
+--   | .scalar, acc     => acc
+--   | .vector k, acc   => k.getmvarsAux acc
 
 
-private def RType.getmvarsAux : RType → Array (Nat × String × RKind) → Array (Nat × String × RKind)
-  | .upi _bk _pc _un b, acc   => b.getmvarsAux acc
-  | .pi bt b, acc    => b.getmvarsAux (bt.getmvarsAux acc)
-  | .data dt, acc    => dt.getmvarsAux acc
+-- private def RType.getmvarsAux : RType → Array (Nat × String × RKind) → Array (Nat × String × RKind)
+--   | .upi _bk _pc _un b, acc   => b.getmvarsAux acc
+--   | .pi bt b, acc    => b.getmvarsAux (bt.getmvarsAux acc)
+--   | .data dt, acc    => dt.getmvarsAux acc
 
--- now have to deduplicate and sort. very silly approach but it works for now.
-def RType.getmvars (t : RType) : Array (String × RKind) :=
-  let sorted := (t.getmvarsAux #[]).qsort (fun (n1, _, _) (n2, _, _) => n1 ≤ n2)
-  let deduped := sorted.foldl (fun acc x =>
-    if acc.any (fun y => y == x) then acc else acc.push x) #[]
-  deduped.map (fun (_, s, r) => (s, r))
+-- -- now have to deduplicate and sort. very silly approach but it works for now.
+-- def RType.getmvars (t : RType) : Array (String × RKind) :=
+--   let sorted := (t.getmvarsAux #[]).qsort (fun (n1, _, _) (n2, _, _) => n1 ≤ n2)
+--   let deduped := sorted.foldl (fun acc x =>
+--     if acc.any (fun y => y == x) then acc else acc.push x) #[]
+--   deduped.map (fun (_, s, r) => (s, r))
 
-#eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
+-- #eval [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1].getmvars
 
-def RType.countUniqueMVars : RType → Nat := (· |>.getmvars |>.size)
-def RType.countUniqueMVars' : RType → Nat := Array.size ∘ RType.getmvars
+-- def RType.countUniqueMVars : RType → Nat := (· |>.getmvars |>.size)
+-- def RType.countUniqueMVars' : RType → Nat := Array.size ∘ RType.getmvars
 
 -- def RType.subst (x : RType) (v : RType) (t : RType) : RType :=
 --   match

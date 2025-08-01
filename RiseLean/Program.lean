@@ -41,15 +41,17 @@ partial def elabRDeclAndRExpr (e: Syntax) : Option Syntax → RElabM Expr
     | `(rise_decl| def $x:ident : $t:rise_type $decl:rise_decl ) => do
       let t ← elabToRType t
       -- Lean.logInfo m!"found {x.getId} : {t}"
-      withNewTerm (x.getId, t) do elabRDeclAndRExpr e (some decl)
+      withNewGlobalTerm (x.getId, t) do elabRDeclAndRExpr e (some decl)
+
     | `(rise_decl| def $x:ident : $t:rise_type ) => do
       let t ← elabToRType t
       -- Lean.logInfo m!"found {x.getId} : {t}"
-      withNewTerm (x.getId, t) do elabRDeclAndRExpr e none
+      withNewGlobalTerm (x.getId, t) do elabRDeclAndRExpr e none
+
     | _ => throwUnsupportedSyntax
   | none => do
       let e ← elabToRExpr e
-      let t ← inferAux [] e
+      let t ← inferAux e
       return toExpr <| RResult.mk e t
 
 partial def elabRProgram : Syntax → RElabM Expr
@@ -88,51 +90,51 @@ macro_rules
 | `(#pp $e) => `(#eval IO.print <| toString $e)
 
 
-#check [Rise|
-def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
-def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
-def add : {δ : data} → δ → δ → δ
-def mult : {δ : data} → δ → δ → δ
-def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
-def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
-def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
+-- #check [Rise|
+-- def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
+-- def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
+-- def add : {δ : data} → δ → δ → δ
+-- def mult : {δ : data} → δ → δ → δ
+-- def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
+-- def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
+-- def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
 
-fun as => fun bs =>
-     zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
-]
+-- fun as => fun bs =>
+--      zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
+-- ]
 
-#check [Rise|
-  import core
+-- #check [Rise|
+--   import core
 
-  fun as => fun bs =>
-       zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
-]
+--   fun as => fun bs =>
+--        zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
+-- ]
 
-#check [RiseC|
-  fun as => fun bs =>
-       zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
-]
+-- #check [RiseC|
+--   fun as => fun bs =>
+--        zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
+-- ]
 
-#pp [RiseC|
-  fun(k : nat) => fun(a : k . float) => reduce add 0 a
-]
+-- #pp [RiseC|
+--   fun(k : nat) => fun(a : k . float) => reduce add 0 a
+-- ]
 
 #pp [RiseC|
   fun(a : 3 . float) => reduce add 0 a
 ]
 
--- wrong: need to propagate unification results up
-#pp [RiseC|
-  fun a => reduce add 0 a
-]
+-- -- wrong: need to propagate unification results up
+-- #pp [RiseC|
+--   fun a => reduce add 0 a
+-- ]
 
-#pp [RiseC|
-  fun a => reduce add 0
-]
+-- #pp [RiseC|
+--   fun a => reduce add 0
+-- ]
 
-#pp [RiseC|
-  map (fun ab : float × float => mult (fst ab) (snd ab))
-]
+-- #pp [RiseC|
+--   map (fun ab : float × float => mult (fst ab) (snd ab))
+-- ]
 
 #pp [RiseC| add 0 5]
 #pp [RiseC| reduce add 0]
