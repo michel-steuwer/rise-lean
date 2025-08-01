@@ -4,66 +4,70 @@ import RiseLean.Type
 import RiseLean.Unification
 
 -- set_option linter.unusedVariables false
--- 
+--
 -- def check (mctx : MVCtx) (kctx : KCtx) (tctx : TCtx) (t1 t2: RType) : Except String Bool :=
 --   -- match t1, t2 with
 --   -- | .pi bt1 b1, .pi bt2 b2 =>
 --   return t1 == t2
 
-partial def addImplicits (mctx : MVCtx) (t: RType) : (MVCtx × RType) :=
+
+partial def addImplicits (t: RType) : RElabM RType := do
   match t with
-  | .upi bk .im un b =>
-    let newB := b--b.liftmvars mctx.size
-    let newMctx := mctx.push (un.toName, bk, none)
-    addImplicits newMctx newB
-  | x => (mctx, x)
+  | .upi bk .im un b => do
+    let mid ← getFreshMVarId
+    addMVar mid un.toName bk none
+    let newB := b.bvar2mvar mid
+    addImplicits newB
+  | x => return x
 
--- TODO: with primitives in the context, their mvars are now shared by all invocations of the same primitive... this was not a problem before -.-
-
-def inferAux (s : Substitution) (e: RExpr) : RElabM (RType × Substitution) := do
+def inferAux (s : Substitution) (e: RExpr) : RElabM RType := do
   match e with
   | .lam bt body =>
     match bt with
     | .some t =>
-      let (bodyt, s) ← withNewTerm ("todo".toName, bt) do inferAux s body
-      return (.pi t bodyt, s)
+      let bodyt ← withNewTerm ("todo".toName, bt) do inferAux s body
+      return .pi t bodyt
     | none =>
-      let t := RType.data (.mvar 0 "todo")
-      let (bodyt, s) ← withNewMVar ("todo".toName, RKind.data, none) do
-                       withNewTerm ("todo".toName, t) do
-                        inferAux s body
-      dbg_trace (bodyt, s)
-      let t := t.apply s -- TODO: not enough
-      return (.pi t bodyt, s)
+      throwError "todo lam"
+    --   let t := RType.data (.mvar 0 "todo")
+    --   let (bodyt, s) ← withNewTVar ("todo".toName, some RKind.data) do
+    --                    withNewTerm ("todo".toName, t) do
+    --                     inferAux s body
+    --   dbg_trace (bodyt, s)
+    --   let t := t.apply s -- TODO: not enough
+    --   return (.pi t bodyt, s)
 
   | .ulam bk body =>
-    match bk with
-    | some bk =>
-      let (bodyt, s) ← withNewMVar ("todo".toName, bk, none) do inferAux s body
-      return (.upi bk .ex "todo" bodyt, s)
-    | none => throwError "todo: infer ulam arg without annotation"
+    throwError "todo ulam"
+    -- match bk with
+    -- | some bk =>
+    --   let (bodyt, s) ← withNewMVar ("todo".toName, bk, none) do inferAux s body
+    --   return (.upi bk .ex "todo" bodyt, s)
+    -- | none => throwError "todo: infer ulam arg without annotation"
 
   | .bvar id _ =>
-    let tctx ← getTCtx
-    match tctx.reverse[id]!.2 with
-    | some t => return (t, s)
-    | none => throwError "todo: infer bvar without annotation"
+    throwError "unexpected bvar {id}"
+    -- let tctx ← getTCtx
+    -- match tctx.reverse[id]!.2 with
+    -- | some t => return t
+    -- | none => throwError "todo: infer bvar without annotation"
 
-  | .lit _ => return (RType.data .scalar, s)
+  | .lit _ => return RType.data .scalar
 
   | .app f e =>
-    let (ft, s) ← inferAux s f
-    let mctx ← getMVCtx
-    let (newMctx, ft) := addImplicits mctx ft
-    let (et, s) ← withNewMVCTx (λ _ => newMctx) do inferAux s e
-    let (newMctx, et) := addImplicits newMctx et
-    match ft.liftmvars (et.getmvars.size) with
+    let ft ← inferAux s f
+    let ft ← addImplicits ft
+    let et ← inferAux s e
+    let et ← addImplicits et
+    match ft with
     | .pi blt brt =>
       match blt.unify et with
       | some sub =>
-        dbg_trace (brt, sub ++ s)
-        return (brt.apply sub, sub ++ s)
-      | none => throwError s!"\n{repr e}\ncannot unify {blt} with {et}"
+        addSubst sub
+        return brt.apply sub
+      | none =>
+        -- dbg_trace brt
+        throwError s!"\n{repr e}\ncannot unify {blt} with {et}"
     | .upi bk .im un b =>
       throwError s!"unexpected upi {ft}"
     | _ => throwError s!"not a function type: {ft}"

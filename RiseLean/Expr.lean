@@ -39,7 +39,7 @@ partial def elabToRExpr : Syntax → RElabM RExpr
 
   | `(rise_expr| fun ( $x:ident : $k:rise_kind ) => $b:rise_expr ) => do
     let k ← elabToRKind k
-    let b ← withNewMVar (x.getId, k, none) do elabToRExpr b
+    let b ← withNewTVar (x.getId, some k) do elabToRExpr b
     return RExpr.ulam (some k) b
 
   | `(rise_expr| $e1:rise_expr $e2:rise_expr ) => do
@@ -109,3 +109,6 @@ elab "[RiseE|" e:rise_expr "]" : term => do
 
 -- TODO: do we want to parse this as n being an implicit parameter?
 #check [RiseE| fun(n : nat) => fun(x : n . float) => x]
+
+
+-- def RExpr.bvar2fvar (e : RExpr) ()

@@ -54,12 +54,13 @@ partial def elabToRNat : Syntax → RElabM RNat
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     | some idx =>
       return RNat.bvar idx x.getId.toString
-    | none =>
-      let mctx ← getMVCtx
-      match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
-      | some idx =>
-        return RNat.mvar idx x.getId.toString
-      | none => throwErrorAt x s!"rnat: unknown identifier {mkConst x.getId}"
+    | none => throwErrorAt x s!"rnat: unknown identifier {mkConst x.getId}"
+    -- | none =>
+    --   let mctx ← getMVCtx
+    --   match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
+    --   | some idx =>
+    --     return RNat.mvar idx x.getId.toString
+    --   | none => throwErrorAt x s!"rnat: unknown identifier {mkConst x.getId}"
   | _ => throwUnsupportedSyntax
 
 instance : ToExpr RNat where
@@ -122,15 +123,17 @@ partial def elabToRData : Syntax → RElabM RData
 
   | `(rise_data| $x:ident) => do
     let kctx ← getKCtx
-    let mctx ← getMVCtx
+    -- let mctx ← getMVCtx
     match kctx.reverse.findIdx? (λ (name, _) => name == x.getId) with
     | some index =>
       return RData.bvar index x.getId.toString
-    | none =>
-      match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
-      | some index =>
-        return RData.mvar index x.getId.toString
-      | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
+    | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
+
+    -- | none =>
+      -- match mctx.reverse.findIdx? (λ (name, _, _) => name == x.getId) with
+      -- | some index =>
+      --   return RData.mvar index x.getId.toString
+      -- | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
 
   | `(rise_data| $n:rise_nat . $d:rise_data) => do
     let n ← elabToRNat n
@@ -416,3 +419,29 @@ def RType.getRKind : RType → RKind
   | .data .. => .data
   | _ => .type -- not sure if correct
   -- never .nat? is my model wrong?
+
+
+def RNat.bvar2mvar (rn : RNat) (n : RBVarId) (m : RMVarId) : RNat :=
+  match rn with
+  | .bvar bn un => if bn == n then .mvar m un else rn
+  | .mvar .. => rn
+  | .nat .. => rn
+
+def RData.bvar2mvar (dt : RData) (n : RBVarId) (m : RMVarId) : RData :=
+  match dt with
+  | .bvar bn un => if bn == n then .mvar m un else dt
+  | .mvar .. => dt
+  | .array rn dt => .array (rn.bvar2mvar n m) (dt.bvar2mvar n m)
+  | .pair dt1 dt2 => .pair (dt1.bvar2mvar n m) (dt2.bvar2mvar n m)
+  | .index rn => .index (rn.bvar2mvar n m)
+  | .scalar => dt
+  | .vector rn => .vector (rn.bvar2mvar n m)
+
+
+def RType.bvar2mvar (t : RType) (mid : RMVarId) : RType :=
+  go t 0 mid where
+  go : RType → RBVarId → RMVarId → RType
+  | .data dt, n, m => .data (dt.bvar2mvar n m)
+  | .upi bk pc un b, n, m => .upi bk pc un (go b (n+1) m)
+  | .pi bt b, n, m => .pi (go bt n m) (go b n m)
+

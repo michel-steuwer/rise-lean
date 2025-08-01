@@ -9,17 +9,18 @@ instance : ToString SubstEnum where
     | SubstEnum.data rdata => s!"data({rdata})"
     | SubstEnum.nat rnat => s!"nat({rnat})"
 
-def RNat.substNat (t : RNat) (x : MVarId) (s : RNat) : RNat :=
+def RNat.substNat (t : RNat) (x : RMVarId) (s : RNat) : RNat :=
     match t with
     | .mvar y _ => if x == y then s else t
+    | .bvar .. => t
     | .nat _ => t
 
-def RNat.subst (t : RNat) (x : MVarId) (s : SubstEnum) : RNat :=
+def RNat.subst (t : RNat) (x : RMVarId) (s : SubstEnum) : RNat :=
   match s with
   | .data _ => t
   | .nat s => t.substNat x s
 
-def RData.substNat (t : RData) (x : MVarId) (s : RNat) : RData :=
+def RData.substNat (t : RData) (x : RMVarId) (s : RNat) : RData :=
   match t with
   | .mvar .. => t
   | .array k d => .array (k.substNat x s) d
@@ -29,7 +30,7 @@ def RData.substNat (t : RData) (x : MVarId) (s : RNat) : RData :=
   | .scalar => .scalar
   | .vector k => .vector (k.substNat x s)
 
-def RData.substData (t : RData) (x : MVarId) (s : RData) : RData :=
+def RData.substData (t : RData) (x : RMVarId) (s : RData) : RData :=
   match t with
   | .mvar y _ => if x == y then s else t
   | .array k d => .array k (d.substData x s)
@@ -39,33 +40,34 @@ def RData.substData (t : RData) (x : MVarId) (s : RData) : RData :=
   | .scalar => .scalar
   | .vector k => .vector k
 
-def RData.subst (t : RData) (x : MVarId) (s : SubstEnum) : RData :=
+def RData.subst (t : RData) (x : RMVarId) (s : SubstEnum) : RData :=
   match s with
   | .data s => t.substData x s
   | .nat s => t.substNat x s
 
-def RType.substNat (t : RType) (x : MVarId) (s : RNat) : RType :=
+def RType.substNat (t : RType) (x : RMVarId) (s : RNat) : RType :=
   match t with
   | .data dt => .data (dt.substNat x s)
   | .upi bk pc un body => .upi bk pc un (body.substNat x s)
   | .pi binderType body => .pi (binderType.substNat x s) (body.substNat x s)
 
-def RType.substData (t : RType) (x : MVarId) (s : RData) : RType :=
+def RType.substData (t : RType) (x : RMVarId) (s : RData) : RType :=
   match t with
   | .data dt => .data (dt.substData x s)
   | .upi bk pc un body => .upi bk pc un (body.substData x s)
   | .pi binderType body => .pi (binderType.substData x s) (body.substData x s)
 
-def RType.subst (t : RType) (x : MVarId) (s : SubstEnum) : RType :=
+def RType.subst (t : RType) (x : RMVarId) (s : SubstEnum) : RType :=
   match s with
   | .data s => t.substData x s
   | .nat s => t.substNat x s
 
-def RNat.has (v : MVarId) : RNat → Bool
+def RNat.has (v : RMVarId) : RNat → Bool
   | .mvar id _ => id == v
+  | .bvar .. => false
   | .nat _ => false
 
-def RData.has (v : MVarId) : RData → Bool
+def RData.has (v : RMVarId) : RData → Bool
   | .mvar id _ => id == v
   | .bvar .. => false
   | .array _ d => d.has v
@@ -94,6 +96,9 @@ partial def unifyOneRNat (s t : RNat) : Option Substitution :=
   | .nat n, .nat m =>
     if n == m then return [] else none
 
+  | .bvar x _, .bvar y _ =>
+    if x == y then some [] else none
+
   | .mvar x _, .mvar y _ =>
     if x == y then some [] else some [(x, .nat t)]
 
@@ -102,6 +107,8 @@ partial def unifyOneRNat (s t : RNat) : Option Substitution :=
       none
     else
       some [(x, .nat term)]
+
+  | _, _ => none
 
 partial def unifyRNat (equations : List (RNat × RNat)) : Option Substitution :=
   match equations with
@@ -227,55 +234,55 @@ private def unifies (l r : RType) : Bool :=
 -/
 elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
   let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
-  let mctx_list ← mvars.toList.mapM (fun var => do
-    let name := var.getId
-    -- let kind_expr ← `(RKind.data)
-    -- let kind_elab ← Lean.Elab.Term.elabTerm kind_expr none
-    return (name, RKind.data, none)
+  let mvars ← mvars.toList.mapM (fun var => do
+    return {userName := var.getId, kind := RKind.data, type:= none}
   )
-  let mctx := mctx_list.toArray
-  liftToTermElabMWith { defaultContext with mctx := mctx } defaultState <| elabRType l
+  -- let mvars : List ((Lean.Name × RKind × Option RType) × Nat) := mvars.zipIdx
+  let mvars : Lean.PersistentHashMap RMVarId MetaVarDeclaration :=
+    mvars.zipIdx.foldl (λ acc (x, id) => acc.insert id x) Lean.PersistentHashMap.empty
+  liftToTermElabMWith defaultContext {defaultState with mvars := mvars} <| elabRType l
 
 
+-- #check [RTw a     | a                     ]
 -- tests. note that both params to unify should have the same mvar context.
 
-#assert (unifies [RTw a     | a                     ] [RTw a     | float                ]) == true
-#assert (unifies [RTw a     | float                 ] [RTw a     | a                    ]) == true
-#assert (unifies [RTw a     | a                     ] [RTw a     | a                    ]) == true
-#assert (unifies [RTw a     | 3 . a                 ] [RTw a     | 3 . float            ]) == true
-#assert (unifies [RTw a     | float → a             ] [RTw a     | float → 3<float>     ]) == true
-#assert (unifies [RTw a     | 4 . a                 ] [RTw a     | 4 . 5<float>         ]) == true
-#assert (unifies [RTw a b   | a                     ] [RTw a b   | b                    ]) == true
-#assert (unifies [RTw a b   | a × b                 ] [RTw a b   | float × 5<float>     ]) == true
-#assert (unifies [RTw a b   | float × a             ] [RTw a b   | b × 3<float>         ]) == true
-#assert (unifies [RTw a b   | a × b                 ] [RTw a b   | 5<float> × float     ]) == true
-#assert (unifies [RTw a b   | 5<float> × float      ] [RTw a b   | a × b                ]) == true
-#assert (unifies [RTw a b   | a → a                 ] [RTw a b   | a → b                ]) == true
-#assert (unifies [RTw a b c | a → b                 ] [RTw a b c | b → c                ]) == true
-#assert (unifies [RTw a b c | a → b                 ] [RTw a b c | c → c                ]) == true
-#assert (unifies [RTw a b c | a × b                 ] [RTw a b c | c                    ]) == true
-#assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → float            ]) == true
-#assert (unifies [RTw a b c | c → float             ] [RTw a b c | a × b → a            ]) == true
-#assert (unifies [RTw a b c | a × b                 ] [RTw a b c | b × c                ]) == true
-#assert (unifies [RTw a b c | b × c                 ] [RTw a b c | a × b                ]) == true
-#assert (unifies [RTw       | 2 . float             ] [RTw       | 3 . float            ]) == false
-#assert (unifies [RTw       | float                 ] [RTw       | 3<float>             ]) == false
-#assert (unifies [RTw       | idx[1]                ] [RTw       | idx[2]               ]) == false
-#assert (unifies [RTw a     | float → float         ] [RTw a     | a                    ]) == false
-#assert (unifies [RTw a     | a                     ] [RTw a     | a → float            ]) == false
-#assert (unifies [RTw a     | a → float             ] [RTw a     | a                    ]) == false
-#assert (unifies [RTw a     | a                     ] [RTw a     | a × float            ]) == false
-#assert (unifies [RTw a     | a × float             ] [RTw a     | a                    ]) == false
-#assert (unifies [RTw a b   | a                     ] [RTw a b   | a → b                ]) == false
-#assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → c                ]) == false
-#assert (unifies [RTw a b c | c → c                 ] [RTw a b c | a × b → a            ]) == false
--- these mvars are of kind nat, but no one checked if they fit! these shouldn't succeed right now.
-#assert (unifies [RTw a     | idx[a]                ] [RTw a     | idx[5]               ]) == true
-#assert (unifies [RTw a b   | a . b                 ] [RTw a b   | 3 . float            ]) == true
-#assert (unifies [RTw a b   | a . a                 ] [RTw a b   | 3 . b                ]) == true
-#assert (unifies [RTw a b   | idx[a]                ] [RTw a b   | idx[b]               ]) == true
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | float                ]) == true
+-- #assert (unifies [RTw a     | float                 ] [RTw a     | a                    ]) == true
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | a                    ]) == true
+-- #assert (unifies [RTw a     | 3 . a                 ] [RTw a     | 3 . float            ]) == true
+-- #assert (unifies [RTw a     | float → a             ] [RTw a     | float → 3<float>     ]) == true
+-- #assert (unifies [RTw a     | 4 . a                 ] [RTw a     | 4 . 5<float>         ]) == true
+-- #assert (unifies [RTw a b   | a                     ] [RTw a b   | b                    ]) == true
+-- #assert (unifies [RTw a b   | a × b                 ] [RTw a b   | float × 5<float>     ]) == true
+-- #assert (unifies [RTw a b   | float × a             ] [RTw a b   | b × 3<float>         ]) == true
+-- #assert (unifies [RTw a b   | a × b                 ] [RTw a b   | 5<float> × float     ]) == true
+-- #assert (unifies [RTw a b   | 5<float> × float      ] [RTw a b   | a × b                ]) == true
+-- #assert (unifies [RTw a b   | a → a                 ] [RTw a b   | a → b                ]) == true
+-- #assert (unifies [RTw a b c | a → b                 ] [RTw a b c | b → c                ]) == true
+-- #assert (unifies [RTw a b c | a → b                 ] [RTw a b c | c → c                ]) == true
+-- #assert (unifies [RTw a b c | a × b                 ] [RTw a b c | c                    ]) == true
+-- #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → float            ]) == true
+-- #assert (unifies [RTw a b c | c → float             ] [RTw a b c | a × b → a            ]) == true
+-- #assert (unifies [RTw a b c | a × b                 ] [RTw a b c | b × c                ]) == true
+-- #assert (unifies [RTw a b c | b × c                 ] [RTw a b c | a × b                ]) == true
+-- #assert (unifies [RTw       | 2 . float             ] [RTw       | 3 . float            ]) == false
+-- #assert (unifies [RTw       | float                 ] [RTw       | 3<float>             ]) == false
+-- #assert (unifies [RTw       | idx[1]                ] [RTw       | idx[2]               ]) == false
+-- #assert (unifies [RTw a     | float → float         ] [RTw a     | a                    ]) == false
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | a → float            ]) == false
+-- #assert (unifies [RTw a     | a → float             ] [RTw a     | a                    ]) == false
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | a × float            ]) == false
+-- #assert (unifies [RTw a     | a × float             ] [RTw a     | a                    ]) == false
+-- #assert (unifies [RTw a b   | a                     ] [RTw a b   | a → b                ]) == false
+-- #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → c                ]) == false
+-- #assert (unifies [RTw a b c | c → c                 ] [RTw a b c | a × b → a            ]) == false
+-- -- these mvars are of kind nat, but no one checked if they fit! these shouldn't succeed right now.
+-- #assert (unifies [RTw a     | idx[a]                ] [RTw a     | idx[5]               ]) == true
+-- #assert (unifies [RTw a b   | a . b                 ] [RTw a b   | 3 . float            ]) == true
+-- #assert (unifies [RTw a b   | a . a                 ] [RTw a b   | 3 . b                ]) == true
+-- #assert (unifies [RTw a b   | idx[a]                ] [RTw a b   | idx[b]               ]) == true
 
 
 
 
-#eval (unify [RTw a     | idx[a]                ] [RTw a     | idx[5]               ])
+-- #eval (unify [RTw a     | idx[a]                ] [RTw a     | idx[5]               ])

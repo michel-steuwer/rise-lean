@@ -50,7 +50,7 @@ partial def elabRDeclAndRExpr (e: Syntax) : Option Syntax → RElabM Expr
   | none => do
       let e ← elabToRExpr e
       let t ← inferAux [] e
-      return toExpr <| RResult.mk e t.1
+      return toExpr <| RResult.mk e t
 
 partial def elabRProgram : Syntax → RElabM Expr
   | `(rise_program| $d:rise_decl $e:rise_expr ) => do
@@ -63,12 +63,10 @@ elab "[Rise|" p:rise_program "]" : term => do
   let p ← liftMacroM <| expandMacros p
   liftToTermElabM <| elabRProgram p
 
--- alt:
 set_option hygiene false in
 macro_rules
   | `(rise_decl| import core) => `(rise_decl|
     def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
---    def $(mkIdent `map) : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
     def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
     def add : {δ : data} → δ → δ → δ
     def mult : {δ : data} → δ → δ → δ
