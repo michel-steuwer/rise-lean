@@ -139,3 +139,8 @@ macro_rules
 #pp [RiseC| add 0 5]
 #pp [RiseC| reduce add 0]
 #pp [RiseC| map transpose]
+
+#pp [RiseC|
+  fun (x : 32 . 32 .float) =>
+    transpose (transpose x)
+]
