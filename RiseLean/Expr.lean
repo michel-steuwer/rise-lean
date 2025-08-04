@@ -8,11 +8,21 @@ declare_syntax_cat rise_expr
 syntax num                                                  : rise_expr
 syntax ident                                                : rise_expr
 syntax "fun" "(" ident (":" rise_type)? ")" "=>" rise_expr  : rise_expr
-syntax "fun"     ident (":" rise_type)?     "=>" rise_expr  : rise_expr
+syntax "fun"     ident+ (":" rise_type)?     "=>" rise_expr  : rise_expr
 syntax "fun" "(" ident (":" rise_kind)  ")" "=>" rise_expr  : rise_expr
 syntax:50 rise_expr:50 rise_expr:51                         : rise_expr
-syntax:40 rise_expr:41 "|>" rise_expr:40                    : rise_expr
+syntax:40 rise_expr:40 "|>" rise_expr:41                    : rise_expr
 syntax:60 "(" rise_expr ")"                                 : rise_expr
+
+set_option pp.raw true
+set_option pp.raw.maxDepth 10
+macro_rules
+  | `(rise_expr| fun $x:ident $y:ident $xs:ident* => $e:rise_expr) =>
+    match xs with
+    | #[] =>
+      `(rise_expr| fun $x => fun $y => $e)
+    | _ =>
+      `(rise_expr| fun $x => fun $y => fun $xs* => $e)
 
 partial def elabToRExpr : Syntax → RElabM RExpr
   | `(rise_expr| $l:num) => do
@@ -99,6 +109,8 @@ elab "[RiseE|" e:rise_expr "]" : term => do
 
 --set_option pp.explicit true
 #check [RiseE| fun as => as]
+#check [RiseE| fun as bs => as]
+#check [RiseE| fun as bs cs => as]
 #check [RiseE| fun as => fun bs => (as bs)]
 #check [RiseE| fun as => fun bs => as bs (fun c => c)]
 #check [RiseE| fun as => as (fun as => as)]
