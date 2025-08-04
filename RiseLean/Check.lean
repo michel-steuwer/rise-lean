@@ -1,4 +1,5 @@
 import RiseLean.Prelude
+import RiseLean.RElabM
 import RiseLean.Expr
 import RiseLean.Type
 import RiseLean.Unification
@@ -39,8 +40,8 @@ partial def inferAux (e: RExpr) : RElabM RType := do
       addMVar id Lean.Name.anonymous RKind.data  
       let t :=  RType.data (.mvar id Lean.Name.anonymous)
       let bodyt ← withNewLocalTerm (un, t) do inferAux body
-      let t ← applyUnifyResults t
-      let bodyt ← applyUnifyResults bodyt
+      let t ← applyUnifyResultsUntilStable t
+      -- let bodyt ← applyUnifyResults bodyt
       return .pi t bodyt
             -- throwError "todo lam"
     --   let t := RType.data (.mvar 0 "todo")
