@@ -167,7 +167,30 @@ def RType.apply (t : RType) (subst : Substitution) : RType :=
 ------------------------------------------------
 --
 --
--- 
+--
+
+def digitToSubscript (d : Nat) : Char :=
+  match d with
+  | 0 => '₀'
+  | 1 => '₁'
+  | 2 => '₂'
+  | 3 => '₃'
+  | 4 => '₄'
+  | 5 => '₅'
+  | 6 => '₆'
+  | 7 => '₇'
+  | 8 => '₈'
+  | 9 => '₉'
+  | _ => '₀' -- :/
+
+def natToSubscript (n : Nat) : String :=
+  let rec getDigits (n : Nat) : List Nat :=
+    if n < 10 then [n]
+    else (n % 10) :: getDigits (n / 10)
+  let digits := getDigits n
+  String.mk (digits.reverse.map digitToSubscript)
+
+
 
 instance : ToString RKind where
   toString
@@ -179,14 +202,14 @@ instance : ToString RKind where
 instance : ToString RNat where
   toString
     | RNat.bvar idx name => s!"{name}@{idx}"
-    | RNat.mvar id name => s!"?{name}_{id}"
+    | RNat.mvar id name => s!"?{name}{natToSubscript id}"
     | RNat.nat n => s!"{n}"
 
 
 def RData.toString : RData → String
   | RData.bvar idx name => s!"{name}@{idx}"
-  | RData.mvar id name => s!"?{name}_{id}"
   | RData.array n d => s!"{n}.{RData.toString d}"
+  | RData.mvar id name => s!"?{name}{natToSubscript id}"
   | RData.pair d1 d2 => s!"({RData.toString d1} × {RData.toString d2})"
   | RData.index n => s!"idx[{n}]"
   | RData.scalar => "scalar"
