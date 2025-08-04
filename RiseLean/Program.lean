@@ -155,3 +155,22 @@ macro_rules
 #pp [RiseC| add 0 5]
 #pp [RiseC| reduce add 0]
 #pp [RiseC| map transpose]
+
+
+#pp [RiseC|
+--   // Matrix Matrix Multiplication in RISE
+--   val dot = fun(as, fun(bs,
+--     zip(as)(bs) |> map(fun(ab, mult(fst(ab))(snd(ab)))) |> reduce(add)(0) ) )
+--   val mm = fun(a : M.K.float, fun(b : K.N.float,
+--     a |> map(fun(arow, // iterating over M
+--       transpose(b) |> map(fun(bcol, // iterating over N
+--       dot(arow)(bcol) )))) ) ) // iterating over K
+-- 
+-- Matrix Matrix Multiplication in RISE
+fun a b =>
+  a |> map(fun arow => -- iterating over M
+    transpose(b) |> map(fun bcol => -- iterating over N
+      zip arow bcol |>
+        map (fun ab => mult (fst ab) (snd ab)) |>
+        reduce add 0)) -- iterating over K
+]
