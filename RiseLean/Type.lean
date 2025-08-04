@@ -1,15 +1,9 @@
 import Lean
 import RiseLean.Prelude
+import RiseLean.RElabM
 open Lean Elab Meta Command
 
 -- abbrev MVarCtx := Array (Name × Expr)
-
-
-instance : ToString RKind where
-  toString
-    | RKind.nat => "nat"
-    | RKind.data => "data"
-    | RKind.type => "type"
 
 
 declare_syntax_cat rise_kind
@@ -34,12 +28,6 @@ instance : ToExpr RKind where
   toTypeExpr := mkConst ``RKind
 
 
-
-instance : ToString RNat where
-  toString
-    | RNat.bvar idx name => s!"{name}@{idx}"
-    | RNat.mvar id name => s!"?{name}_{id}"
-    | RNat.nat n => s!"{n}"
 
 declare_syntax_cat rise_nat
 syntax num                    : rise_nat
@@ -97,17 +85,6 @@ partial def elabRNat : Syntax → RElabM Expr
 -- instance : BEq RData where
 --   beq := RData.beq
 
-def RData.toString : RData → String
-  | RData.bvar idx name => s!"{name}@{idx}"
-  | RData.mvar id name => s!"?{name}_{id}"
-  | RData.array n d => s!"{n}.{RData.toString d}"
-  | RData.pair d1 d2 => s!"({RData.toString d1} × {RData.toString d2})"
-  | RData.index n => s!"idx[{n}]"
-  | RData.scalar => "scalar"
-  | RData.vector n => s!"{n}<float>"
-
-instance : ToString RData where
-  toString := RData.toString
 
 declare_syntax_cat rise_data
 syntax:50 rise_nat "." rise_data:50       : rise_data
@@ -182,10 +159,6 @@ partial def elabRData : Syntax → RElabM Expr
     let d ← elabToRData stx
     return toExpr d
 
-instance : ToString Plicity where
-  toString
-    | Plicity.ex => "explicit"
-    | Plicity.im => "implicit"
 
 instance : ToExpr Plicity where
   toExpr e := match e with
@@ -197,17 +170,6 @@ instance : ToExpr Plicity where
 -- only for Check::infer! to be able to panic
 instance : Inhabited RType where
   default := RType.data .scalar
-
-def RType.toString : RType → String
-  | RType.data dt => RData.toString dt
-  | RType.upi kind pc un body =>
-      let plicityStr := if pc == Plicity.im then "{" else "("
-      let plicityEnd := if pc == Plicity.im then "}" else ")"
-      s!"{plicityStr}{un} : {kind}{plicityEnd} → {RType.toString body}"
-  | RType.pi binderType body => s!"{RType.toString binderType} → {RType.toString body}"
-
-instance : ToString RType where
-  toString := RType.toString
 
 
 declare_syntax_cat rise_type
@@ -445,7 +407,6 @@ def RType.bvar2mvar (t : RType) (mid : RMVarId) : RType :=
   | .upi bk pc un b, n, m => .upi bk pc un (go b (n+1) m)
   | .pi bt b, n, m => .pi (go bt n m) (go b n m)
 
-instance : ToString SubstEnum where
-  toString
-    | SubstEnum.data rdata => s!"data({rdata})"
-    | SubstEnum.nat rnat => s!"nat({rnat})"
+
+
+

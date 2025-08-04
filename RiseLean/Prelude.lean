@@ -1,4 +1,3 @@
-import Lean
 
 --
 -- Kind
@@ -164,92 +163,59 @@ def RData.apply (t : RData) (subst : Substitution) : RData :=
 def RType.apply (t : RType) (subst : Substitution) : RType :=
   subst.foldr (fun (id, replacement) acc => acc.subst id replacement) t
 
-structure RContext where
-  gtctx : TCtx := #[]
-  ltctx : TCtx := #[]
-  kctx : KCtx := #[]
-  -- mctx : MVCtx
-  -- debug : Bool := false
-  -- depth : Nat := 0
 
-structure RState where
-  unifyResult : Substitution := []
-  nextMVarId : RMVarId := 0
-  mvars : Lean.PersistentHashMap RMVarId MetaVarDeclaration := {}
+------------------------------------------------
+--
+--
+-- 
 
-abbrev RElabM := ReaderT RContext <| StateRefT RState Lean.Elab.TermElabM
-
-def defaultState : RState := {}
-def defaultContext : RContext := {}
-
-def liftToTermElabMWith (ctx : RContext) (initialState : RState) (x : RElabM α) : Lean.Elab.TermElabM α := do
-  let (result, _) ← x.run ctx |>.run initialState
-  return result
-
-def liftToTermElabM (x : RElabM α) : Lean.Elab.TermElabM α := do
-  let (result, _) ← x.run defaultContext |>.run defaultState
-  return result
-
-def getFreshMVarId : RElabM RMVarId := do
-  let rstate : RState ← get
-  set { rstate with nextMVarId := rstate.nextMVarId + 1 }
-  return rstate.nextMVarId
-
-def addMVar (id : RMVarId) (userName : Lean.Name) (kind : RKind) (type : Option RType := none) : RElabM Unit := do
-  let rstate : RState ← get
-  set { rstate with mvars := rstate.mvars.insert id { userName, kind, type } }
-  return ()
-
-def findMVar? (id : RMVarId) : RElabM <| Option MetaVarDeclaration := do
-  let rstate : RState ← get
-  return rstate.mvars.find? id
-
-def addSubst (s : Substitution) : RElabM Unit := do
-  modify (λ r => {r with unifyResult := s ++ r.unifyResult})
-
-def applyUnifyResults (t : RType) : RElabM RType := do
-  let unifyResults : Substitution := (← get).unifyResult
-  return t.apply unifyResults
-
-def withNewLocalTerm (arg : TCtxElem) : RElabM α → RElabM α :=
-  withReader (fun ctx => { ctx with ltctx := ctx.ltctx.push arg })
-
-def withNewGlobalTerm (arg : TCtxElem) : RElabM α → RElabM α :=
-  withReader (fun ctx => { ctx with gtctx := ctx.gtctx.push arg })
-
-def findConst? (n : Lean.Name) : RElabM <| Option RType := do
-  let gtctx := (← read).gtctx
-  return match gtctx.find? (λ (name, _) => name == n) with
-  | some (_, rtype) => rtype
-  | none => none
-
-def findLocal? (n : Lean.Name) : RElabM <| Option RType := do
-  let ltctx := (← read).ltctx
-  return match ltctx.find? (λ (name, _) => name == n) with
-  | some (_, rtype) => rtype
-  | none => none
-
-def ur : RElabM Substitution := do
-  return (← get).unifyResult
+instance : ToString RKind where
+  toString
+    | RKind.nat => "nat"
+    | RKind.data => "data"
+    | RKind.type => "type"
 
 
-def withNewTVar (arg : KCtxElem) : RElabM α → RElabM α :=
-  withReader (fun ctx => { ctx with kctx := ctx.kctx.push arg })
+instance : ToString RNat where
+  toString
+    | RNat.bvar idx name => s!"{name}@{idx}"
+    | RNat.mvar id name => s!"?{name}_{id}"
+    | RNat.nat n => s!"{n}"
 
--- def withNewMVCTx (f : MVCtx → MVCtx) : RElabM α → RElabM α :=
--- withReader (fun ctx => { ctx with mctx := f ctx.mctx })
 
-def withNewType (arg : KCtxElem) : RElabM α → RElabM α :=
-  withReader (fun ctx => { ctx with kctx := ctx.kctx.push arg })
+def RData.toString : RData → String
+  | RData.bvar idx name => s!"{name}@{idx}"
+  | RData.mvar id name => s!"?{name}_{id}"
+  | RData.array n d => s!"{n}.{RData.toString d}"
+  | RData.pair d1 d2 => s!"({RData.toString d1} × {RData.toString d2})"
+  | RData.index n => s!"idx[{n}]"
+  | RData.scalar => "scalar"
+  | RData.vector n => s!"{n}<float>"
 
-def getLTCtx : RElabM TCtx := do
-  return (← read).ltctx
+instance : ToString RData where
+  toString := RData.toString
 
-def getGTCtx : RElabM TCtx := do
-  return (← read).gtctx
+instance : ToString Plicity where
+  toString
+    | Plicity.ex => "explicit"
+    | Plicity.im => "implicit"
 
-def getKCtx : RElabM KCtx := do
-  return (← read).kctx
+def RType.toString : RType → String
+  | RType.data dt => RData.toString dt
+  | RType.upi kind pc un body =>
+      let plicityStr := if pc == Plicity.im then "{" else "("
+      let plicityEnd := if pc == Plicity.im then "}" else ")"
+      s!"{plicityStr}{un} : {kind}{plicityEnd} → {RType.toString body}"
+  | RType.pi binderType body => s!"{RType.toString binderType} → {RType.toString body}"
 
--- def getMVCtx : RElabM MVCtx := do
--- return (← read).mctx
+instance : ToString RType where
+  toString := RType.toString
+
+
+instance : ToString SubstEnum where
+  toString
+    | SubstEnum.data rdata => s!"data({rdata})"
+    | SubstEnum.nat rnat => s!"nat({rnat})"
+    
+instance : ToString Substitution where
+  toString s := String.intercalate "\n" (s.map toString)
