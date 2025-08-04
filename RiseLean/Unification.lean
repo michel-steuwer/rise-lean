@@ -1,5 +1,4 @@
 import RiseLean.Prelude
-import RiseLean.Type
 import Assert
 import Lean
 
@@ -128,6 +127,7 @@ def RType.unify (l r : RType) : Option Substitution :=
 
 def unify := RType.unify
 
+
 -- technically, the "_, _" case doesn't check for enough. we would want better checking here, but we trust the algorithm.
 private def unifies (l r : RType) : Bool :=
   match l.unify r, r.unify l with
@@ -143,22 +143,22 @@ private def unifies (l r : RType) : Bool :=
     -- dbg_trace (l.unify r, r.unify l)
     false
 
-/--
-  Utility elaborator for Rise Types - adds metavariables to context.
-  "[Rise Type with <identifiers> | <rise_type>]"
+-- /--
+--   Utility elaborator for Rise Types - adds metavariables to context.
+--   "[Rise Type with <identifiers> | <rise_type>]"
 
-  TODO (if necessary): make a difference between variables and metavariables.
-  TODO (if necessary): currently all metavars are just data
--/
-elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
-  let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
-  let mvars ← mvars.toList.mapM (fun var => do
-    return {userName := var.getId, kind := RKind.data, type:= none}
-  )
-  -- let mvars : List ((Lean.Name × RKind × Option RType) × Nat) := mvars.zipIdx
-  let mvars : Lean.PersistentHashMap RMVarId MetaVarDeclaration :=
-    mvars.zipIdx.foldl (λ acc (x, id) => acc.insert id x) Lean.PersistentHashMap.empty
-  liftToTermElabMWith defaultContext {defaultState with mvars := mvars} <| elabRType l
+--   TODO (if necessary): make a difference between variables and metavariables.
+--   TODO (if necessary): currently all metavars are just data
+-- -/
+-- elab "[RTw" mvars:ident* "|" t:rise_type "]" : term => do
+--   let l ← Lean.Elab.liftMacroM <| Lean.expandMacros t
+--   let mvars ← mvars.toList.mapM (fun var => do
+--     return {userName := var.getId, kind := RKind.data, type:= none}
+--   )
+--   -- let mvars : List ((Lean.Name × RKind × Option RType) × Nat) := mvars.zipIdx
+--   let mvars : Lean.PersistentHashMap RMVarId MetaVarDeclaration :=
+--     mvars.zipIdx.foldl (λ acc (x, id) => acc.insert id x) Lean.PersistentHashMap.empty
+--   liftToTermElabMWith defaultContext {defaultState with mvars := mvars} <| elabRType l
 
 
 -- #check [RTw a     | a                     ]
