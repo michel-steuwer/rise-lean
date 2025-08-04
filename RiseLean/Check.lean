@@ -184,10 +184,10 @@ partial def inferAux (e: RExpr) : RElabM RType := do
 -- #eval toString <| infer [Rise| map(transpose)]
 
 -- #eval IO.println <| toString <| infer [Rise| map(id)]
--- #check [Rise| fun(k : nat, fun(a : k . float, reduce(add)(0)(a)))]
+-- #check [Rise| fun(k : nat, fun(a : k·float, reduce(add)(0)(a)))]
 
 -- -- TODO this or add(a, a)
--- -- #check [Rise| fun(a : 3 . float, add a a)]
+-- -- #check [Rise| fun(a : 3·float, add a a)]
 
 -- -- TODO: translate example programs in shine/src/test/scala/rise/core
 -- -- /home/n/tub/masters/shine/src/test/scala/apps

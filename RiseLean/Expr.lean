@@ -123,12 +123,12 @@ elab "[RiseE|" e:rise_expr "]" : term => do
 -- because x is only in the kinding context
 -- #check [RiseE| fun(x : nat) => x]
 
-#check [RiseE| fun(x : 5 . float) => x]
+#check [RiseE| fun(x : 5·float) => x]
 
 #check [RiseE| fun(x : nat) => 3]
 
 -- TODO: do we want to parse this as n being an implicit parameter?
-#check [RiseE| fun(n : nat) => fun(x : n . float) => x]
+#check [RiseE| fun(n : nat) => fun(x : n·float) => x]
 
 
 def RExpr.bvar2fvar (e : RExpr) (un : Lean.Name) : RExpr :=

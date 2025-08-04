@@ -87,7 +87,7 @@ partial def elabRNat : Syntax → RElabM Expr
 
 
 declare_syntax_cat rise_data
-syntax:50 rise_nat "." rise_data:50       : rise_data
+syntax:50 rise_nat "·" rise_data:50       : rise_data
 syntax:50 "float"                         : rise_data
 syntax:10 rise_data "×" rise_data         : rise_data
 syntax ident                              : rise_data
@@ -112,7 +112,7 @@ partial def elabToRData : Syntax → RElabM RData
       --   return RData.mvar index x.getId.toString
       -- | none => throwErrorAt x s!"rdata: unknown identifier {mkConst x.getId}"
 
-  | `(rise_data| $n:rise_nat . $d:rise_data) => do
+  | `(rise_data| $n:rise_nat·$d:rise_data) => do
     let n ← elabToRNat n
     let d ← elabToRData d
     return RData.array n d
@@ -259,7 +259,7 @@ def unexpandRiseDataArray : Unexpander
           ((RType.data ((RData.bvar 1 `δ1).pair (RData.bvar 0 `δ2))).pi (RType.data (RData.bvar 1 `δ1))))
 
 
-#check [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2]
+#check [RiseT| {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n·δ1 → n·δ2]
 
 def RData.ismvar : RData → Bool
   | .mvar .. => true
@@ -406,7 +406,3 @@ def RType.bvar2mvar (t : RType) (mid : RMVarId) : RType :=
   | .data dt, n, m => .data (dt.bvar2mvar n m)
   | .upi bk pc un b, n, m => .upi bk pc un (go b (n+1) m)
   | .pi bt b, n, m => .pi (go bt n m) (go b n m)
-
-
-
-

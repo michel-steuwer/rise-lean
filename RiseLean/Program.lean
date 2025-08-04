@@ -70,14 +70,14 @@ elab "[Rise|" p:rise_program "]" : term => do
 set_option hygiene false in
 macro_rules
   | `(rise_decl| import core) => `(rise_decl|
-    def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
-    def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
+    def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n·δ1 → n·δ2
+    def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n·δ → δ
     def add : {δ : data} → δ → δ → δ
     def mult : {δ : data} → δ → δ → δ
     def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
     def snd : {δ1 δ2 : data} → δ1 × δ2 → δ2
-    def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
-    def transpose : {n m : nat} → {δ : data} → n . m . δ → m . n . δ
+    def zip : {n : nat} → {δ1 δ2 : data} → n·δ1 → n·δ2 → n·(δ1 × δ2)
+    def transpose : {n m : nat} → {δ : data} → n·m·δ → m·n·δ
   )
 
 elab "[RiseC|" p:rise_expr "]" : term => do
@@ -93,13 +93,13 @@ macro_rules
 
 
 -- #check [Rise|
--- def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
--- def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n . δ → δ
+-- def map : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n·δ1 → n·δ2
+-- def reduce : {n : nat} → {δ : data} → (δ → δ → δ) → δ → n·δ → δ
 -- def add : {δ : data} → δ → δ → δ
 -- def mult : {δ : data} → δ → δ → δ
 -- def fst : {δ1 δ2 : data} → δ1 × δ2 → δ1
 -- def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
--- def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
+-- def zip : {n : nat} → {δ1 δ2 : data} → n·δ1 → n·δ2 → n·(δ1 × δ2)
 
 -- fun as => fun bs =>
 --      zip as bs |> map (fun ab => mult (fst ab) (snd ab)) |> reduce add 0
@@ -119,11 +119,11 @@ macro_rules
 ]
 
 -- #pp [RiseC|
---   fun(k : nat) => fun(a : k . float) => reduce add 0 a
+--   fun(k : nat) => fun(a : k·float) => reduce add 0 a
 -- ]
 
 #pp [RiseC|
-  fun(a : 3 . float) => reduce add 0 a
+  fun(a : 3·float) => reduce add 0 a
 ]
 
 #pp [RiseC|
