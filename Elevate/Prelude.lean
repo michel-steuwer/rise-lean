@@ -42,5 +42,5 @@ partial
 def Strategy.bottomUp [Traversable P] (s : Strategy P): Strategy P :=
     (Traversable.one (.bottomUp s)).leftChoice s
 
-def normalize [Traversable P] (s: Strategy P) : Strategy P :=
+def Strategy.normalize [Traversable P] (s: Strategy P) : Strategy P :=
     .repeat (.topDown s)

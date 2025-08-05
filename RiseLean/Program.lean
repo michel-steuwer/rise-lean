@@ -76,6 +76,8 @@ macro_rules
     def snd : {δ1 δ2 : data} → δ1 × δ2 → δ1
     def zip : {n : nat} → {δ1 δ2 : data} → n . δ1 → n . δ2 → n . (δ1 × δ2)
     def transpose : {n m : nat} → {δ : data} → n . m . δ → m . n . δ
+
+    def mapSeq : {n : nat} → {δ1 δ2 : data} → (δ1 → δ2) → n . δ1 → n . δ2
   )
 
 elab "[RiseC|" p:rise_expr "]" : term => do
@@ -143,4 +145,8 @@ macro_rules
 #pp [RiseC|
   fun (x : 32 . 32 .float) =>
     transpose (transpose x)
+]
+
+#eval [RiseC| fun (x: 1024 . float) => fun (alpha : float) =>
+  x |> map (mult alpha)
 ]
