@@ -2,6 +2,7 @@ import Lean
 import RiseLean.Prelude
 import RiseLean.RElabM
 open Lean Elab Meta Command
+open PrettyPrinter Delaborator SubExpr
 
 -- abbrev MVarCtx := Array (Name × Expr)
 
@@ -159,7 +160,6 @@ partial def elabRData : Syntax → RElabM Expr
     let d ← elabToRData stx
     return toExpr d
 
-
 instance : ToExpr Plicity where
   toExpr e := match e with
   | Plicity.ex => mkConst ``Plicity.ex
@@ -241,11 +241,10 @@ elab "[RiseT|" t:rise_type "]" : term => do
   return term
 
 
-open PrettyPrinter Delaborator SubExpr
 -- set_option pp.rawOnError true
 @[app_unexpander RType.pi]
-def unexpandRiseDataArray : Unexpander
-  | `($(_) $l $r) => `($l → $r)
+def unexpandRiseTypePi : Unexpander
+  | `($(_) $l $r) => `(($l → $r))
   | _ => throw ()
 
 
