@@ -63,7 +63,7 @@ deriving Repr
 abbrev KCtxElem := Lean.Name × Option RKind
 abbrev KCtx := Array KCtxElem
 
-abbrev TCtxElem := Lean.Name × Option RType
+abbrev TCtxElem := Lean.Name × RType
 abbrev TCtx := Array TCtxElem
 
 structure MetaVarDeclaration where

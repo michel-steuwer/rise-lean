@@ -11,7 +11,7 @@ structure RResult where
 
 
 instance : ToString RResult where
-  toString x := s!"expr:\n{repr x.expr}\n\ntype:\n{x.type}"
+  toString x := s!"\nexpr:\n{x.expr}\ntype:\n{x.type}"
 
 -- instance [ToExpr α] : ToExpr (Except String α) where
 --   toExpr
