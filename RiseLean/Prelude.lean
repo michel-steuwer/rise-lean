@@ -74,11 +74,6 @@ structure MetaVarDeclaration where
 abbrev RMVarId := Nat
 abbrev RBVarId := Nat
 
--- def f : RMVarId → Nat := (·)
--- def x : BVarId := 0
--- example : Nat := f x
-
-
 inductive SubstEnum
   | data (rdata : RData)
   | nat (rnat : RNat)
@@ -242,3 +237,42 @@ instance : ToString SubstEnum where
 
 instance : ToString Substitution where
   toString s := String.intercalate "\n" (s.map toString)
+
+-- def RExpr.toString : RExpr → String
+--   | bvar id => s!"@{id}"
+--   | fvar s => s.toString
+--   | const s => s.toString
+--   | lit n => s!"{n}"
+--   | app f e => s!"({f.toString} {e.toString})"
+--   | lam s t b => match t with
+--     | some t => s!"(λ {s} : {t} => {b.toString})"
+--     | none => s!"(λ {s} => {b.toString})"
+--   | ulam s k b => match k with
+--     | some k => s!"(Λ {s} : {k} => {b.toString})"
+--     | none => s!"(Λ {s} => {b.toString})"
+
+-- instance : ToString RExpr where
+--   toString := RExpr.toString
+  
+def RExpr.render : RExpr → Std.Format
+  | bvar id => f!"@{id}"
+  | fvar s => s.toString
+  | const s => s.toString
+  | lit n => s!"{n}"
+  | app f e => match f,e with
+    | app .. , app .. => f.render ++ " " ++ Std.Format.paren e.render
+    | app .. , _      => f.render ++ " " ++ e.render
+    | _      , app .. => f.render ++ " " ++ Std.Format.paren e.render
+    | _,_ => f.render ++ " " ++ e.render
+  | lam s t b => match t with
+    | some t => s!"(λ {s} : {t} =>{Std.Format.line}{b.render})"
+    | none => Std.Format.paren s!"λ {s} =>{Std.Format.line}{b.render}" ++ Std.Format.line
+  | ulam s k b => match k with
+    | some k => s!"(Λ {s} : {k} =>{Std.Format.line}{b.render})"
+    | none => Std.Format.paren s!"Λ {s} =>{Std.Format.line}{b.render}" ++ Std.Format.line
+
+instance : Std.ToFormat RExpr where
+  format := RExpr.render
+
+instance : ToString RExpr where
+  toString e := Std.Format.pretty e.render
