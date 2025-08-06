@@ -164,39 +164,39 @@ private def unifies (l r : RType) : Bool :=
 -- #check [RTw a     | a                     ]
 -- tests. note that both params to unify should have the same mvar context.
 
--- #assert (unifies [RTw a     | a                     ] [RTw a     | float                ]) == true
--- #assert (unifies [RTw a     | float                 ] [RTw a     | a                    ]) == true
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | scalar                ]) == true
+-- #assert (unifies [RTw a     | scalar                 ] [RTw a     | a                    ]) == true
 -- #assert (unifies [RTw a     | a                     ] [RTw a     | a                    ]) == true
--- #assert (unifies [RTw a     | 3·a                 ] [RTw a     | 3·float            ]) == true
--- #assert (unifies [RTw a     | float → a             ] [RTw a     | float → 3<float>     ]) == true
--- #assert (unifies [RTw a     | 4·a                 ] [RTw a     | 4·5<float>         ]) == true
+-- #assert (unifies [RTw a     | 3·a                 ] [RTw a     | 3·scalar            ]) == true
+-- #assert (unifies [RTw a     | scalar → a             ] [RTw a     | scalar → 3<scalar>     ]) == true
+-- #assert (unifies [RTw a     | 4·a                 ] [RTw a     | 4·5<scalar>         ]) == true
 -- #assert (unifies [RTw a b   | a                     ] [RTw a b   | b                    ]) == true
--- #assert (unifies [RTw a b   | a × b                 ] [RTw a b   | float × 5<float>     ]) == true
--- #assert (unifies [RTw a b   | float × a             ] [RTw a b   | b × 3<float>         ]) == true
--- #assert (unifies [RTw a b   | a × b                 ] [RTw a b   | 5<float> × float     ]) == true
--- #assert (unifies [RTw a b   | 5<float> × float      ] [RTw a b   | a × b                ]) == true
+-- #assert (unifies [RTw a b   | a × b                 ] [RTw a b   | scalar × 5<scalar>     ]) == true
+-- #assert (unifies [RTw a b   | scalar × a             ] [RTw a b   | b × 3<scalar>         ]) == true
+-- #assert (unifies [RTw a b   | a × b                 ] [RTw a b   | 5<scalar> × scalar     ]) == true
+-- #assert (unifies [RTw a b   | 5<scalar> × scalar      ] [RTw a b   | a × b                ]) == true
 -- #assert (unifies [RTw a b   | a → a                 ] [RTw a b   | a → b                ]) == true
 -- #assert (unifies [RTw a b c | a → b                 ] [RTw a b c | b → c                ]) == true
 -- #assert (unifies [RTw a b c | a → b                 ] [RTw a b c | c → c                ]) == true
 -- #assert (unifies [RTw a b c | a × b                 ] [RTw a b c | c                    ]) == true
--- #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → float            ]) == true
--- #assert (unifies [RTw a b c | c → float             ] [RTw a b c | a × b → a            ]) == true
+-- #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → scalar            ]) == true
+-- #assert (unifies [RTw a b c | c → scalar             ] [RTw a b c | a × b → a            ]) == true
 -- #assert (unifies [RTw a b c | a × b                 ] [RTw a b c | b × c                ]) == true
 -- #assert (unifies [RTw a b c | b × c                 ] [RTw a b c | a × b                ]) == true
--- #assert (unifies [RTw       | 2·float             ] [RTw       | 3·float            ]) == false
--- #assert (unifies [RTw       | float                 ] [RTw       | 3<float>             ]) == false
+-- #assert (unifies [RTw       | 2·scalar             ] [RTw       | 3·scalar            ]) == false
+-- #assert (unifies [RTw       | scalar                 ] [RTw       | 3<scalar>             ]) == false
 -- #assert (unifies [RTw       | idx[1]                ] [RTw       | idx[2]               ]) == false
--- #assert (unifies [RTw a     | float → float         ] [RTw a     | a                    ]) == false
--- #assert (unifies [RTw a     | a                     ] [RTw a     | a → float            ]) == false
--- #assert (unifies [RTw a     | a → float             ] [RTw a     | a                    ]) == false
--- #assert (unifies [RTw a     | a                     ] [RTw a     | a × float            ]) == false
--- #assert (unifies [RTw a     | a × float             ] [RTw a     | a                    ]) == false
+-- #assert (unifies [RTw a     | scalar → scalar         ] [RTw a     | a                    ]) == false
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | a → scalar            ]) == false
+-- #assert (unifies [RTw a     | a → scalar             ] [RTw a     | a                    ]) == false
+-- #assert (unifies [RTw a     | a                     ] [RTw a     | a × scalar            ]) == false
+-- #assert (unifies [RTw a     | a × scalar             ] [RTw a     | a                    ]) == false
 -- #assert (unifies [RTw a b   | a                     ] [RTw a b   | a → b                ]) == false
 -- #assert (unifies [RTw a b c | a × b → a             ] [RTw a b c | c → c                ]) == false
 -- #assert (unifies [RTw a b c | c → c                 ] [RTw a b c | a × b → a            ]) == false
 -- -- these mvars are of kind nat, but no one checked if they fit! these shouldn't succeed right now.
 -- #assert (unifies [RTw a     | idx[a]                ] [RTw a     | idx[5]               ]) == true
--- #assert (unifies [RTw a b   | a·b                 ] [RTw a b   | 3·float            ]) == true
+-- #assert (unifies [RTw a b   | a·b                 ] [RTw a b   | 3·scalar            ]) == true
 -- #assert (unifies [RTw a b   | a·a                 ] [RTw a b   | 3·b                ]) == true
 -- #assert (unifies [RTw a b   | idx[a]                ] [RTw a b   | idx[b]               ]) == true
 

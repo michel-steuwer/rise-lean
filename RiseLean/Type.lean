@@ -88,15 +88,15 @@ partial def elabRNat : Syntax → RElabM Expr
 
 declare_syntax_cat rise_data
 syntax:50 rise_nat "·" rise_data:50       : rise_data
-syntax:50 "float"                         : rise_data
+syntax:50 "scalar"                         : rise_data
 syntax:10 rise_data "×" rise_data         : rise_data
 syntax ident                              : rise_data
 syntax "idx" "[" rise_nat "]"          : rise_data -- TODO: weird error when using a var named idx in normal code. possible to scope syntax such that normal code is not affected? i was hoping that syntax_cat is doing that, but it's not.
-syntax rise_nat "<" "float" ">"        : rise_data
+syntax rise_nat "<" "scalar" ">"        : rise_data
 syntax "(" rise_data ")"                  : rise_data
 
 partial def elabToRData : Syntax → RElabM RData
-  | `(rise_data| float) => return RData.scalar
+  | `(rise_data| scalar) => return RData.scalar
 
   | `(rise_data| $x:ident) => do
     let kctx ← getKCtx
@@ -126,7 +126,7 @@ partial def elabToRData : Syntax → RElabM RData
     let n <- elabToRNat n
     return RData.index n
 
-  | `(rise_data| $n:rise_nat < float >) => do
+  | `(rise_data| $n:rise_nat < scalar >) => do
     let n <- elabToRNat n
     return RData.vector n
 
@@ -249,8 +249,8 @@ def unexpandRiseDataArray : Unexpander
   | _ => throw ()
 
 
-#check [RiseT| float]
-#check [RiseT| float → float ]
+#check [RiseT| scalar]
+#check [RiseT| scalar → scalar ]
 #check [RiseT| {δ : data} → δ → δ → δ]
 #check [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1]
 #guard [RiseT| {δ1 δ2 : data} → δ1 × δ2 → δ1] ==

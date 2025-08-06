@@ -144,5 +144,5 @@ elab "[RiseTE|" e:rise_expr "]" : term => do
   let p ← liftMacroM <| expandMacros e
   liftToTermElabM <| elabTypedRExpr p
 
-#check [RiseTE| fun a : float → float => a 10000]
-#check [RiseTE| fun a : float → float → float => a 10000 2]
+#check [RiseTE| fun a : scalar → scalar => a 10000]
+#check [RiseTE| fun a : scalar → scalar → scalar => a 10000 2]

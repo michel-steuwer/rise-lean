@@ -119,11 +119,11 @@ macro_rules
 ]
 
 -- #pp [RiseC|
---   fun(k : nat) => fun(a : k·float) => reduce add 0 a
+--   fun(k : nat) => fun(a : k·scalar) => reduce add 0 a
 -- ]
 
 #pp [RiseC|
-  fun(a : 3·float) => reduce add 0 a
+  fun(a : 3·scalar) => reduce add 0 a
 ]
 
 #pp [RiseC|
@@ -135,7 +135,7 @@ macro_rules
 ]
 
 -- #pp [RiseC|
---   map (fun ab : float × float => mult (fst ab) (snd ab))
+--   map (fun ab : scalar × scalar => mult (fst ab) (snd ab))
 -- ]
 #pp [RiseC|
   map (fun ab => mult (fst ab) (snd ab))
@@ -161,7 +161,7 @@ macro_rules
 --   // Matrix Matrix Multiplication in RISE
 --   val dot = fun(as, fun(bs,
 --     zip(as)(bs) |> map(fun(ab, mult(fst(ab))(snd(ab)))) |> reduce(add)(0) ) )
---   val mm = fun(a : M.K.float, fun(b : K.N.float,
+--   val mm = fun(a : M.K.scalar, fun(b : K.N.scalar,
 --     a |> map(fun(arow, // iterating over M
 --       transpose(b) |> map(fun(bcol, // iterating over N
 --       dot(arow)(bcol) )))) ) ) // iterating over K

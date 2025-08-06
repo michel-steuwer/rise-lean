@@ -10,14 +10,14 @@ import RiseLean.Program
 --   κ ::= nat | data                                (Natural Number Kind, Datatype Kind)
 --   τ ::= δ | τ → τ | (x : κ) → τ                   (Data Type, Function Type, Dependent Function Type)
 --   n ::= 0 | n + n | n · n | ...                   (Natural Number Literals, Binary Operations)
---   δ ::= n.δ | δ × δ | idx [n] | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
+--   δ ::= n.δ | δ × δ | idx [n] | scalar | n<scalar>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 --
 
 -- example program
 --   // Matrix Matrix Multiplication in RISE
 --   val dot = fun(as, fun(bs,
 --     zip(as)(bs) |> map(fun(ab, mult(fst(ab))(snd(ab)))) |> reduce(add)(0) ) )
---   val mm = fun(a : M.K.float, fun(b : K.N.float,
+--   val mm = fun(a : M.K.scalar, fun(b : K.N.scalar,
 --     a |> map(fun(arow, // iterating over M
 --       transpose(b) |> map(fun(bcol, // iterating over N
 --       dot(arow)(bcol) )))) ) ) // iterating over K

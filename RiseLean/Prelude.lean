@@ -18,7 +18,7 @@ inductive RNat
 deriving Repr, BEq, DecidableEq
 
 -- DataType
---   δ ::= n.δ | δ × δ | "idx [" n "]" | float | n<float>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
+--   δ ::= n.δ | δ × δ | "idx [" n "]" | scalar | n<scalar>  (Array Type, Pair Type, Index Type, Scalar Type, Vector Type)
 inductive RData
   | bvar (deBruijnIndex : Nat) (userName : Lean.Name)
   | mvar (id : Nat) (userName : Lean.Name)
@@ -208,7 +208,7 @@ def RData.toString : RData → String
   | RData.pair d1 d2 => s!"({RData.toString d1} × {RData.toString d2})"
   | RData.index n => s!"idx[{n}]"
   | RData.scalar => "scalar"
-  | RData.vector n => s!"{n}<float>"
+  | RData.vector n => s!"{n}<scalar>"
 
 instance : ToString RData where
   toString := RData.toString
