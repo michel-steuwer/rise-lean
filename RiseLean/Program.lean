@@ -174,3 +174,8 @@ fun a b =>
         map (fun ab => mult (fst ab) (snd ab)) |>
         reduce add 0)) -- iterating over K
 ]
+
+#pp [RiseC|
+  fun (x : 32 . 32 .float) =>
+    transpose (transpose x)
+]
