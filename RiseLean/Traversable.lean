@@ -17,41 +17,24 @@ def RExpr.all (s: Strategy RExpr) : Strategy RExpr :=
       let e' <- s e
       return (.ulam bn bt e')
 
-def RExpr.some (s: Strategy RExpr) : Strategy RExpr :=
-  fun e => match e with
-    | .lit _ | .bvar _ | .fvar _ | .const _ => .error ""
-    | .app f e =>
-      match (s f, s e) with
-        | (.ok f', .ok e') => .ok (.app f' e')
-        | (.ok f',      _) => .ok (.app f' e )
-        | (_,      .ok e') => .ok (.app f  e')
-        | _ => .error ""
-    | .lam bn bt e =>
-      match s e with
-        | .ok e' => .ok (.lam bn bt e')
-        | _ => .error ""
-    | .ulam bn bt e => do
-      match s e with
-        | .ok e' => .ok (.ulam bn bt e')
-        | _ => .error ""
+def RExpr.some (s: Strategy RExpr) : Strategy RExpr
+  | .lit _ | .bvar _ | .fvar _ | .const _ => .error ""
+  | .app f e =>
+    match (s f, s e) with
+      | (.ok f', .ok e') => .ok (.app f' e')
+      | (.ok f',      _) => .ok (.app f' e )
+      | (_,      .ok e') => .ok (.app f  e')
+      | _ => .error ""
+  | .lam bn bt e => (s e).map (.lam bn bt ·)
+  | .ulam bn bt e => (s e).map (.ulam bn bt ·)
 
-def RExpr.one (s: Strategy RExpr) : Strategy RExpr :=
-  fun e => match e with
-    | .lit _ | .bvar _ | .fvar _ | .const _ => .error ""
-    | .app f e =>
-      match s f with
-        | .ok f' => .ok (.app f' e)
-        | _ => match s e with
-          | .ok e' => .ok (.app f e')
-          | _ => .error ""
-    | .lam bn bt e =>
-      match s e with
-        | .ok e' => .ok (.lam bn bt e')
-        | _ => .error ""
-    | .ulam bn bt e => do
-      match s e with
-        | .ok e' => .ok (.ulam bn bt e')
-        | _ => .error ""
+def RExpr.one (s: Strategy RExpr) : Strategy RExpr
+  | .lit _ | .bvar _ | .fvar _ | .const _ => .error ""
+  | .app f e => match s f with
+    | .ok f' => .ok (.app f' e)
+    | _ => (s e).map (.app f ·)
+  | .lam bn bt e => (s e).map (.lam bn bt ·)
+  | .ulam bn bt e => (s e).map (.ulam bn bt ·)
 
 instance : Traversable RExpr where
   all := RExpr.all

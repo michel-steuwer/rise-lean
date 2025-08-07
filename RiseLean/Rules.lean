@@ -3,12 +3,14 @@ import RiseLean.Program
 import RiseLean.Traversable
 import Elevate.Prelude
 
-def rule.transpose_transpose : Strategy RExpr :=
-  fun e => match e with
-    | .app (.const `transpose) (.app (.const `transpose) x) =>
-      .ok x
-    | _ => .error "rule.transpose_transpose"
+def rule.transpose_transpose : Strategy RExpr
+  | .app (.const `transpose) (.app (.const `transpose) x) =>
+    .ok x
+  | _ => .error "rule.transpose_transpose"
 
+-- rule transpose_transpose :=
+--   .app (.const `transpose) (.app (.const `transpose) x) =>
+--     .ok x
 
 #eval
 let input := [RiseC|
